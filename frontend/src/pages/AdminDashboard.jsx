@@ -168,19 +168,19 @@ const SearchableDropdown = ({ options, value, onChange, placeholder, disabled, p
     }, []);
 
     const normalizedOptions = options.map(opt => typeof opt === 'string' ? { value: opt, label: opt } : opt);
-    
+
     const filteredOptions = normalizedOptions
         .filter(opt => opt.label.toLowerCase().includes(searchTerm.toLowerCase()));
-        
+
     const displayValue = normalizedOptions.find(opt => opt.value === value)?.label || value;
 
     const isTop = placement === 'top';
 
     return (
         <div ref={wrapperRef} style={{ position: 'relative', width: '100%' }}>
-            <div 
+            <div
                 onClick={() => !disabled && setIsOpen(!isOpen)}
-                style={{ 
+                style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     backgroundColor: disabled ? 'rgba(0,0,0,0.1)' : 'var(--bg-main)', border: '1px solid var(--border)',
                     borderRadius: '4px', padding: '8px', fontSize: '11px', cursor: disabled ? 'not-allowed' : 'pointer',
@@ -190,7 +190,7 @@ const SearchableDropdown = ({ options, value, onChange, placeholder, disabled, p
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayValue || placeholder}</span>
                 <ChevronDown size={12} style={{ flexShrink: 0, transform: isOpen && isTop ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
             </div>
-            
+
             {isOpen && !disabled && (
                 <div style={{
                     position: 'absolute',
@@ -201,13 +201,13 @@ const SearchableDropdown = ({ options, value, onChange, placeholder, disabled, p
                     maxHeight: '220px', display: 'flex', flexDirection: 'column'
                 }}>
                     <div style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             autoFocus
-                            placeholder="Search..." 
+                            placeholder="Search..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            style={{ 
+                            style={{
                                 width: '100%', padding: '6px', fontSize: '11px',
                                 backgroundColor: 'var(--bg-main)', border: '1px solid var(--border)',
                                 borderRadius: '4px', color: 'var(--text-main)', boxSizing: 'border-box'
@@ -219,7 +219,7 @@ const SearchableDropdown = ({ options, value, onChange, placeholder, disabled, p
                             <div style={{ padding: '8px', fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>No results found</div>
                         ) : (
                             filteredOptions.map((opt, i) => (
-                                <div 
+                                <div
                                     key={i}
                                     onClick={() => {
                                         onChange(opt.value);
@@ -301,7 +301,7 @@ const AdminDashboard = ({ user, setUser }) => {
                         return (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd';
                     }
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
         return '0d';
     };
@@ -419,6 +419,34 @@ const AdminDashboard = ({ user, setUser }) => {
         setIsForceReassignModalOpen(true);
     };
 
+    const restrictedReassignUserIdentifiers = useMemo(() => {
+        if (!reassignTicketObj || !reassignTicketObj.ticket_id) return new Set();
+        const restricted = new Set();
+        const relatedTickets = (ticketsList || []).filter(t => String(t.ticket_id) === String(reassignTicketObj.ticket_id));
+        const rawList = [];
+        relatedTickets.forEach(t => {
+            if (t.raised_by) rawList.push(String(t.raised_by));
+            if (t.assigned_to) rawList.push(String(t.assigned_to));
+            if (t.original_raiser) rawList.push(String(t.original_raiser));
+        });
+        if (reassignTicketObj.raised_by) rawList.push(String(reassignTicketObj.raised_by));
+        if (reassignTicketObj.assigned_to) rawList.push(String(reassignTicketObj.assigned_to));
+        if (reassignTicketObj.original_raiser) rawList.push(String(reassignTicketObj.original_raiser));
+
+        rawList.forEach(val => {
+            const strVal = String(val).trim();
+            if (strVal && !['nan', 'none', '', 'unassigned'].includes(strVal.toLowerCase())) {
+                restricted.add(strVal.toLowerCase());
+                const u = (usersList || []).find(usr => String(usr.employee_id) === strVal || String(usr.email).toLowerCase() === strVal.toLowerCase());
+                if (u) {
+                    if (u.employee_id) restricted.add(String(u.employee_id).toLowerCase());
+                    if (u.email) restricted.add(String(u.email).toLowerCase());
+                }
+            }
+        });
+        return restricted;
+    }, [ticketsList, reassignTicketObj, usersList]);
+
     const reassignSolverOptions = useMemo(() => {
         if (!reassignDept || !reassignDept.trim()) return [];
         const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -428,9 +456,10 @@ const AdminDashboard = ({ user, setUser }) => {
             const isActive = String(u.active).toUpperCase() !== 'FALSE';
             const isNotAdmin = !['Admin', 'Superadmin', 'Super Admin'].includes(u.role);
             const matchDept = uDeptNorm && targetNorm && (uDeptNorm === targetNorm || uDeptNorm.includes(targetNorm) || targetNorm.includes(uDeptNorm));
-            return matchDept && isActive && isNotAdmin;
+            const isRestricted = restrictedReassignUserIdentifiers.has(String(u.employee_id).toLowerCase()) || restrictedReassignUserIdentifiers.has(String(u.email || '').toLowerCase());
+            return matchDept && isActive && isNotAdmin && !isRestricted;
         });
-    }, [usersList, reassignDept]);
+    }, [usersList, reassignDept, restrictedReassignUserIdentifiers]);
 
     const handleForceReassignSubmit = async (e) => {
         e.preventDefault();
@@ -604,21 +633,21 @@ const AdminDashboard = ({ user, setUser }) => {
             setIsUserModalOpen(false); loadSystemData();
         } catch (err) { alert(err.response?.data?.error || "Failed to save user."); }
     };
-    const openUserModal = (mode, userData = defaultUser) => { 
+    const openUserModal = (mode, userData = defaultUser) => {
         if (mode === 'edit' && String(userData.role).toLowerCase().includes('super')) {
             alert('Admins are not authorized to edit Super Admin users.');
             return;
         }
-        setUserModalMode(mode); 
-        setUserFormData({ 
-            ...userData, 
-            phone: userData.phone_number || userData.phone || '', 
-            old_email: userData.email, 
+        setUserModalMode(mode);
+        setUserFormData({
+            ...userData,
+            phone: userData.phone_number || userData.phone || '',
+            old_email: userData.email,
             old_employee_id: userData.employee_id,
             secondary_roles: userData.secondary_roles || '',
             viewer_locations: userData.viewer_locations || ''
-        }); 
-        setIsUserModalOpen(true); 
+        });
+        setIsUserModalOpen(true);
     };
 
     const handleResetPassword = async () => {
@@ -1148,14 +1177,14 @@ const AdminDashboard = ({ user, setUser }) => {
                     </h2>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {activeTab !== 'analytics' && (
-                            <button 
-                                className="btn p-2 text-xs flex-row gap-1" 
-                                onClick={() => setShowKPIs(prev => !prev)} 
+                            <button
+                                className="btn p-2 text-xs flex-row gap-1"
+                                onClick={() => setShowKPIs(prev => !prev)}
                                 title={showKPIs ? "Hide KPI Cards" : "Show KPI Cards"}
-                                style={{ 
-                                    whiteSpace: 'nowrap', 
-                                    borderRadius: '6px', 
-                                    backgroundColor: 'var(--bg-card, #131b2e)', 
+                                style={{
+                                    whiteSpace: 'nowrap',
+                                    borderRadius: '6px',
+                                    backgroundColor: 'var(--bg-card, #131b2e)',
                                     border: '1px solid var(--border, #1e293b)',
                                     color: 'var(--text-main, #f1f5f9)',
                                     fontSize: '11px',
@@ -1174,51 +1203,51 @@ const AdminDashboard = ({ user, setUser }) => {
                 {/* --- GLOBAL KPI METRICS BOARD (ALWAYS VISIBLE IN ANALYTICS, COLLAPSIBLE IN OTHER TABS) --- */}
                 {(activeTab === 'analytics' || showKPIs) && (
                     <div className="kpi-grid">
-                    <div className="card kpi-card kpi-blue" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #3b82f6', background: 'linear-gradient(180deg, rgba(59,130,246,0.25) 0%, rgba(59,130,246,0) 100%)' }}>
-                        
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Total</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.total.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-purple" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #8b5cf6', background: 'linear-gradient(180deg, rgba(139,92,246,0.25) 0%, rgba(139,92,246,0) 100%)' }}>
-                        {renderTooltip(globalKPI.totalSubTasks.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Total Sub-Tasks</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.totalSubTasks.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-amber" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #f59e0b', background: 'linear-gradient(180deg, rgba(245,158,11,0.25) 0%, rgba(245,158,11,0) 100%)' }}>
-                        {renderTooltip(globalKPI.open.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Open</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.open.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-purple" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #8b5cf6', background: 'linear-gradient(180deg, rgba(139,92,246,0.25) 0%, rgba(139,92,246,0) 100%)' }}>
-                        {renderTooltip(globalKPI.inProgress.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>In Progress</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.inProgress.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-teal" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #14b8a6', background: 'linear-gradient(180deg, rgba(20,184,166,0.25) 0%, rgba(20,184,166,0) 100%)' }}>
-                        {renderTooltip(globalKPI.resolved.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Resolved</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.resolved.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-green" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #10b981', background: 'linear-gradient(180deg, rgba(16,185,129,0.25) 0%, rgba(16,185,129,0) 100%)' }}>
-                        {renderTooltip(globalKPI.closed.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Closed</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.closed.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-gray" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #6b7280', background: 'linear-gradient(180deg, rgba(107,114,128,0.25) 0%, rgba(107,114,128,0) 100%)' }}>
-                        {renderTooltip(globalKPI.declined.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Declined</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.declined.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-gray" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #3b82f6', background: 'linear-gradient(180deg, rgba(59,130,246,0.25) 0%, rgba(59,130,246,0) 100%)' }}>
-                        {renderTooltip(globalKPI.onHold.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>On Hold</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.onHold.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-red" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #ef4444', background: 'linear-gradient(180deg, rgba(239,68,68,0.25) 0%, rgba(239,68,68,0) 100%)' }}>
-                        {renderTooltip(globalKPI.escalated.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Escalate</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.escalated.count}</h2>
-                    </div>
+                        <div className="card kpi-card kpi-blue" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #3b82f6', background: 'linear-gradient(180deg, rgba(59,130,246,0.25) 0%, rgba(59,130,246,0) 100%)' }}>
+
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Total</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.total.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-purple" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #8b5cf6', background: 'linear-gradient(180deg, rgba(139,92,246,0.25) 0%, rgba(139,92,246,0) 100%)' }}>
+                            {renderTooltip(globalKPI.totalSubTasks.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Total Sub-Tasks</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.totalSubTasks.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-amber" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #f59e0b', background: 'linear-gradient(180deg, rgba(245,158,11,0.25) 0%, rgba(245,158,11,0) 100%)' }}>
+                            {renderTooltip(globalKPI.open.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Open</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.open.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-purple" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #8b5cf6', background: 'linear-gradient(180deg, rgba(139,92,246,0.25) 0%, rgba(139,92,246,0) 100%)' }}>
+                            {renderTooltip(globalKPI.inProgress.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>In Progress</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.inProgress.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-teal" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #14b8a6', background: 'linear-gradient(180deg, rgba(20,184,166,0.25) 0%, rgba(20,184,166,0) 100%)' }}>
+                            {renderTooltip(globalKPI.resolved.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Resolved</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.resolved.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-green" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #10b981', background: 'linear-gradient(180deg, rgba(16,185,129,0.25) 0%, rgba(16,185,129,0) 100%)' }}>
+                            {renderTooltip(globalKPI.closed.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Closed</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.closed.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-gray" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #6b7280', background: 'linear-gradient(180deg, rgba(107,114,128,0.25) 0%, rgba(107,114,128,0) 100%)' }}>
+                            {renderTooltip(globalKPI.declined.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Declined</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.declined.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-gray" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #3b82f6', background: 'linear-gradient(180deg, rgba(59,130,246,0.25) 0%, rgba(59,130,246,0) 100%)' }}>
+                            {renderTooltip(globalKPI.onHold.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>On Hold</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.onHold.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-red" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #ef4444', background: 'linear-gradient(180deg, rgba(239,68,68,0.25) 0%, rgba(239,68,68,0) 100%)' }}>
+                            {renderTooltip(globalKPI.escalated.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Escalate</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.escalated.count}</h2>
+                        </div>
 
                         <div className="card kpi-card kpi-sla kpi-orange" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #F7941D', background: 'linear-gradient(180deg, rgba(247,148,29,0.25) 0%, rgba(247,148,29,0) 100%)' }}>
                             {renderTooltip(globalKPI.late.levels)}
@@ -1278,50 +1307,6 @@ const AdminDashboard = ({ user, setUser }) => {
                                     </tbody>
                                 </table>
                             )}
-
-                            {/* DEPARTMENT MODAL */}
-                            {isDeptModalOpen && (
-                                <div className="glass-modal" style={{ padding: '20px', borderRadius: '6px', width: '400px', maxWidth: '90%' }}>
-                                    <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>{deptModalMode === 'add' ? 'Register New Department' : 'Edit Department'}</h3>
-                                    <form onSubmit={async (e) => {
-                                        e.preventDefault();
-                                        try {
-                                            if (deptModalMode === 'add') { await createDepartment(deptFormData); alert('Department added successfully.'); }
-                                            else { await updateDepartment(deptFormData); alert('Department updated successfully.'); }
-                                            setIsDeptModalOpen(false); loadSystemData();
-                                        } catch (err) { alert(err.response?.data?.error || "Failed to save department."); }
-                                    }}>
-                                        <input type="text" className="form-control" required placeholder="Department Name" value={deptFormData.department} onChange={e => setDeptFormData({ ...deptFormData, department: e.target.value })} style={{ marginBottom: '12px', fontSize: '10px', padding: '8px' }} />
-                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                                            <button type="button" className="btn" onClick={() => setIsDeptModalOpen(false)} style={{ backgroundColor: 'transparent', border: '1px solid #3f3f46', fontSize: '10px', padding: '6px 10px' }}>Cancel</button>
-                                            <button type="submit" className="btn" style={{ backgroundColor: '#3b82f6', fontSize: '10px', padding: '6px 10px' }}>Save</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            )}
-
-                            {/* ISSUE CATEGORY MODAL */}
-                            {isIssueModalOpen && (
-                                <div className="glass-modal" style={{ padding: '20px', borderRadius: '6px', width: '400px', maxWidth: '90%' }}>
-                                    <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>{issueModalMode === 'add' ? 'Register New Issue & Category' : 'Edit Issue & Category'}</h3>
-                                    <form onSubmit={async (e) => {
-                                        e.preventDefault();
-                                        try {
-                                            if (issueModalMode === 'add') { if (categoryModalType === 'issue') { await createIssueCategory({ issue_name: issueFormData['Issue Category'] }); } else { await createActivityCategory({ activity_name: issueFormData['Activity Category'] }); } alert('Issue Category added successfully.'); }
-                                            else { if (categoryModalType === 'issue') { await updateIssueCategory({ old_issue_name: issueFormData['old_Issue Category'], issue_name: issueFormData['Issue Category'] }); } else { await updateActivityCategory({ old_activity_name: issueFormData['old_Activity Category'], activity_name: issueFormData['Activity Category'] }); } alert('Issue Category updated successfully.'); }
-                                            setIsIssueModalOpen(false); loadSystemData();
-                                        } catch (err) { alert(err.response?.data?.error || "Failed to save issue category."); }
-                                    }}>
-                                        <input type="text" className="form-control" required placeholder="Issue Category" value={issueFormData['Issue Category']} onChange={e => setIssueFormData({ ...issueFormData, 'Issue Category': e.target.value })} style={{ marginBottom: '12px', fontSize: '10px', padding: '8px' }} />
-                                        <input type="text" className="form-control" required placeholder="Activity Category" value={issueFormData['Activity Category']} onChange={e => setIssueFormData({ ...issueFormData, 'Activity Category': e.target.value })} style={{ marginBottom: '12px', fontSize: '10px', padding: '8px' }} />
-                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                                            <button type="button" className="btn" onClick={() => setIsIssueModalOpen(false)} style={{ backgroundColor: 'transparent', border: '1px solid #3f3f46', fontSize: '10px', padding: '6px 10px' }}>Cancel</button>
-                                            <button type="submit" className="btn" style={{ backgroundColor: '#3b82f6', fontSize: '10px', padding: '6px 10px' }}>Save</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            )}
-
                         </div>
                     )}
                     {activeTab === 'ageing' && !loading && (
@@ -1373,53 +1358,53 @@ const AdminDashboard = ({ user, setUser }) => {
                                     <table className="data-table ageing-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                                         <thead>
                                             <tr>                                                 <th onClick={() => handleAgeingSortClick('ticket_id')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Ticket ID">
-                                                     ID {ageingSortField === 'ticket_id' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th onClick={() => handleAgeingSortClick('dept_assigned')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Department">
-                                                     Dept {ageingSortField === 'dept_assigned' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th onClick={() => handleAgeingSortClick('issue_category')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Issue Category">
-                                                     Issue Cat. {ageingSortField === 'issue_category' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th onClick={() => handleAgeingSortClick('activity_category')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Activity Category">
-                                                     Act. Cat. {ageingSortField === 'activity_category' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Description</th>
-                                                 <th onClick={() => handleAgeingSortClick('location')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Location">
-                                                     Location {ageingSortField === 'location' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 'bold' }}>Image</th>
-                                                 <th onClick={() => handleAgeingSortClick('deadline')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Target Deadline">
-                                                     Deadline {ageingSortField === 'deadline' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th onClick={() => handleAgeingSortClick('escalation_level')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Escalation Level">
-                                                     Level {ageingSortField === 'escalation_level' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th onClick={() => handleAgeingSortClick('severity')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Severity">
-                                                     Severity {ageingSortField === 'severity' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th onClick={() => handleAgeingSortClick('status')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Status">
-                                                     Status {ageingSortField === 'status' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th onClick={() => handleAgeingSortClick('assigned_by')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Assigned By">
-                                                     Assigned By {ageingSortField === 'assigned_by' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th onClick={() => handleAgeingSortClick('assigned_to')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Assigned To">
-                                                     Assigned To {ageingSortField === 'assigned_to' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th onClick={() => handleAgeingSortClick('ticket_age_hours')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Ticket Age">
-                                                     Ticket Age {ageingSortField === 'ticket_age_hours' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th onClick={() => handleAgeingSortClick('solver_resolution_hours')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Resolution Time">
-                                                     Res. Time {ageingSortField === 'solver_resolution_hours' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th onClick={() => handleAgeingSortClick('total_turnaround_hours')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Total Turnaround">
-                                                     Turnaround {ageingSortField === 'total_turnaround_hours' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                                 <th onClick={() => handleAgeingSortClick('solver_delay_hours')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Delay">
-                                                     Delay {ageingSortField === 'solver_delay_hours' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
-                                                 </th>
-                                             </tr>
+                                                ID {ageingSortField === 'ticket_id' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                            </th>
+                                                <th onClick={() => handleAgeingSortClick('dept_assigned')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Department">
+                                                    Dept {ageingSortField === 'dept_assigned' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th onClick={() => handleAgeingSortClick('issue_category')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Issue Category">
+                                                    Issue Cat. {ageingSortField === 'issue_category' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th onClick={() => handleAgeingSortClick('activity_category')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Activity Category">
+                                                    Act. Cat. {ageingSortField === 'activity_category' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Description</th>
+                                                <th onClick={() => handleAgeingSortClick('location')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Location">
+                                                    Location {ageingSortField === 'location' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 'bold' }}>Image</th>
+                                                <th onClick={() => handleAgeingSortClick('deadline')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Target Deadline">
+                                                    Deadline {ageingSortField === 'deadline' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th onClick={() => handleAgeingSortClick('escalation_level')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Escalation Level">
+                                                    Level {ageingSortField === 'escalation_level' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th onClick={() => handleAgeingSortClick('severity')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Severity">
+                                                    Severity {ageingSortField === 'severity' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th onClick={() => handleAgeingSortClick('status')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Status">
+                                                    Status {ageingSortField === 'status' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th onClick={() => handleAgeingSortClick('assigned_by')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Assigned By">
+                                                    Assigned By {ageingSortField === 'assigned_by' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th onClick={() => handleAgeingSortClick('assigned_to')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Assigned To">
+                                                    Assigned To {ageingSortField === 'assigned_to' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th onClick={() => handleAgeingSortClick('ticket_age_hours')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Ticket Age">
+                                                    Ticket Age {ageingSortField === 'ticket_age_hours' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th onClick={() => handleAgeingSortClick('solver_resolution_hours')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Resolution Time">
+                                                    Res. Time {ageingSortField === 'solver_resolution_hours' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th onClick={() => handleAgeingSortClick('total_turnaround_hours')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Total Turnaround">
+                                                    Turnaround {ageingSortField === 'total_turnaround_hours' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                                <th onClick={() => handleAgeingSortClick('solver_delay_hours')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Delay">
+                                                    Delay {ageingSortField === 'solver_delay_hours' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
+                                            </tr>
                                         </thead>
                                         <tbody>
                                             {sortedAgeing.length === 0 ? (
@@ -1477,14 +1462,14 @@ const AdminDashboard = ({ user, setUser }) => {
                                                             <td style={{ padding: '12px 8px' }}>{a.solver_resolution_hours ? `${(a.solver_resolution_hours / 24).toFixed(1)}d` : '-'}</td>
                                                             <td style={{ padding: '12px 8px' }}>{a.total_turnaround_hours ? `${(a.total_turnaround_hours / 24).toFixed(1)}d` : '-'}</td>
                                                             {(() => {
-                                                                 const dDays = getDisplayDelayDays(a);
-                                                                 const isDelay = dDays !== '0d';
-                                                                 return (
-                                                                     <td style={{ padding: '12px 8px', color: isDelay ? '#ef4444' : 'inherit', fontWeight: isDelay ? 'bold' : 'normal' }}>
-                                                                         {dDays}
-                                                                     </td>
-                                                                 );
-                                                             })()}
+                                                                const dDays = getDisplayDelayDays(a);
+                                                                const isDelay = dDays !== '0d';
+                                                                return (
+                                                                    <td style={{ padding: '12px 8px', color: isDelay ? '#ef4444' : 'inherit', fontWeight: isDelay ? 'bold' : 'normal' }}>
+                                                                        {dDays}
+                                                                    </td>
+                                                                );
+                                                            })()}
                                                         </tr>
                                                     );
                                                 })
@@ -1497,48 +1482,7 @@ const AdminDashboard = ({ user, setUser }) => {
                     )}
 
 
-                    {/* DEPARTMENT MODAL */}
-                    {isDeptModalOpen && (
-                        <div className="glass-modal" style={{ padding: '20px', borderRadius: '6px', width: '400px', maxWidth: '90%' }}>
-                            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>{deptModalMode === 'add' ? 'Register New Department' : 'Edit Department'}</h3>
-                            <form onSubmit={async (e) => {
-                                e.preventDefault();
-                                try {
-                                    if (deptModalMode === 'add') { await createDepartment(deptFormData); alert('Department added successfully.'); }
-                                    else { await updateDepartment(deptFormData); alert('Department updated successfully.'); }
-                                    setIsDeptModalOpen(false); loadSystemData();
-                                } catch (err) { alert(err.response?.data?.error || "Failed to save department."); }
-                            }}>
-                                <input type="text" className="form-control" required placeholder="Department Name" value={deptFormData.department} onChange={e => setDeptFormData({ ...deptFormData, department: e.target.value })} style={{ marginBottom: '12px', fontSize: '10px', padding: '8px' }} />
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                                    <button type="button" className="btn" onClick={() => setIsDeptModalOpen(false)} style={{ backgroundColor: 'transparent', border: '1px solid #3f3f46', fontSize: '10px', padding: '6px 10px' }}>Cancel</button>
-                                    <button type="submit" className="btn" style={{ backgroundColor: '#3b82f6', fontSize: '10px', padding: '6px 10px' }}>Save</button>
-                                </div>
-                            </form>
-                        </div>
-                    )}
 
-                    {/* ISSUE CATEGORY MODAL */}
-                    {isIssueModalOpen && (
-                        <div className="glass-modal" style={{ padding: '20px', borderRadius: '6px', width: '400px', maxWidth: '90%' }}>
-                            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>{issueModalMode === 'add' ? 'Register New Issue & Category' : 'Edit Issue & Category'}</h3>
-                            <form onSubmit={async (e) => {
-                                e.preventDefault();
-                                try {
-                                    if (issueModalMode === 'add') { if (categoryModalType === 'issue') { await createIssueCategory({ issue_name: issueFormData['Issue Category'] }); } else { await createActivityCategory({ activity_name: issueFormData['Activity Category'] }); } alert('Issue Category added successfully.'); }
-                                    else { if (categoryModalType === 'issue') { await updateIssueCategory({ old_issue_name: issueFormData['old_Issue Category'], issue_name: issueFormData['Issue Category'] }); } else { await updateActivityCategory({ old_activity_name: issueFormData['old_Activity Category'], activity_name: issueFormData['Activity Category'] }); } alert('Issue Category updated successfully.'); }
-                                    setIsIssueModalOpen(false); loadSystemData();
-                                } catch (err) { alert(err.response?.data?.error || "Failed to save issue category."); }
-                            }}>
-                                <input type="text" className="form-control" required placeholder="Issue Category" value={issueFormData['Issue Category']} onChange={e => setIssueFormData({ ...issueFormData, 'Issue Category': e.target.value })} style={{ marginBottom: '12px', fontSize: '10px', padding: '8px' }} />
-                                <input type="text" className="form-control" required placeholder="Activity Category" value={issueFormData['Activity Category']} onChange={e => setIssueFormData({ ...issueFormData, 'Activity Category': e.target.value })} style={{ marginBottom: '12px', fontSize: '10px', padding: '8px' }} />
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                                    <button type="button" className="btn" onClick={() => setIsIssueModalOpen(false)} style={{ backgroundColor: 'transparent', border: '1px solid #3f3f46', fontSize: '10px', padding: '6px 10px' }}>Cancel</button>
-                                    <button type="submit" className="btn" style={{ backgroundColor: '#3b82f6', fontSize: '10px', padding: '6px 10px' }}>Save</button>
-                                </div>
-                            </form>
-                        </div>
-                    )}
 
 
 
@@ -1554,13 +1498,13 @@ const AdminDashboard = ({ user, setUser }) => {
                                         <button className="btn" onClick={() => openUserModal('add')} style={{ backgroundColor: '#10b981', padding: '6px 13px', fontSize: '10px', whiteSpace: 'nowrap' }}>+ Add Employee</button>
                                     )}
                                     {masterControlTab === 'locations' && (
-                                         <>
-                                             <button className="btn" onClick={() => {
-                                                 const loc = locationsList.find(l => l.location === selectedMasterLocations[0]);
-                                                 if (loc) openLocModal('edit', loc);
-                                             }} disabled={selectedMasterLocations.length !== 1} style={{ backgroundColor: selectedMasterLocations.length === 1 ? '#3b82f6' : '#93c5fd', padding: '6px 13px', fontSize: '10px', whiteSpace: 'nowrap', cursor: selectedMasterLocations.length === 1 ? 'pointer' : 'not-allowed' }}>Edit</button>
-                                             <button className="btn" onClick={() => openLocModal('add')} style={{ backgroundColor: '#10b981', padding: '6px 13px', fontSize: '10px', whiteSpace: 'nowrap' }}>+ Add Location</button>
-                                         </>
+                                        <>
+                                            <button className="btn" onClick={() => {
+                                                const loc = locationsList.find(l => l.location === selectedMasterLocations[0]);
+                                                if (loc) openLocModal('edit', loc);
+                                            }} disabled={selectedMasterLocations.length !== 1} style={{ backgroundColor: selectedMasterLocations.length === 1 ? '#3b82f6' : '#93c5fd', padding: '6px 13px', fontSize: '10px', whiteSpace: 'nowrap', cursor: selectedMasterLocations.length === 1 ? 'pointer' : 'not-allowed' }}>Edit</button>
+                                            <button className="btn" onClick={() => openLocModal('add')} style={{ backgroundColor: '#10b981', padding: '6px 13px', fontSize: '10px', whiteSpace: 'nowrap' }}>+ Add Location</button>
+                                        </>
                                     )}
                                 </div>
                             </div>
@@ -2061,7 +2005,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                 </div>
                             )}
 
-                            
+
                             {/* PROJECTS & DEPARTMENTS */}
                             {masterControlTab === 'projects_dept' && (
                                 <div style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
@@ -2072,7 +2016,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                                 Projects {deptSortField === 'project' ? (deptSortOrder === 'asc' ? '▲' : '▼') : ''}
                                             </span>
                                             <div style={{ display: 'flex', gap: '8px' }}>
-                                                <button className="btn" onClick={() => { 
+                                                <button className="btn" onClick={() => {
                                                     const p = projectsList.find(proj => proj.project_name === selectedProjects[0]);
                                                     if (p) {
                                                         setProjectFormData({ project: p.project_name });
@@ -2134,7 +2078,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                             </table>
                                         </div>
                                     </div>
-                                    
+
                                 </div>
                             )}
 
@@ -2356,7 +2300,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                 </div>
                             )}
 
-{/* BULK IMPORT */}
+                            {/* BULK IMPORT */}
                             {masterControlTab === 'import' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                     <div style={{ marginBottom: '10px' }}>
@@ -2379,8 +2323,8 @@ const AdminDashboard = ({ user, setUser }) => {
                                                 <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', textTransform: 'capitalize' }}>Import {activeImportTab.replace('_', ' ')}</h4>
                                                 <p style={{ margin: 0, fontSize: '10px', color: '#71717a' }}>Ensure your Excel file follows the exact template structure.</p>
                                             </div>
-                                            <a 
-                                                href={getImportTemplateUrl(activeImportTab)} 
+                                            <a
+                                                href={getImportTemplateUrl(activeImportTab)}
                                                 className="btn force-white-text"
                                                 style={{ backgroundColor: '#10b981', border: 'none', fontSize: '11px', padding: '6px 16px', display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}
                                                 download
@@ -2391,7 +2335,7 @@ const AdminDashboard = ({ user, setUser }) => {
 
                                         {importSuccess && <div style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '12px', borderRadius: '4px', marginBottom: '16px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={14} /> {importSuccess}</div>}
                                         {importError && <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '12px', borderRadius: '4px', marginBottom: '16px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}><AlertTriangle size={14} /> {importError}</div>}
-                                        
+
                                         {importValidationErrors.length > 0 && (
                                             <div style={{ backgroundColor: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '6px', padding: '16px', marginBottom: '20px' }}>
                                                 <h5 style={{ margin: '0 0 12px 0', color: '#be123c', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}><AlertTriangle size={14} /> Validation Errors ({importValidationErrors.length})</h5>
@@ -2419,13 +2363,13 @@ const AdminDashboard = ({ user, setUser }) => {
                                         )}
 
                                         <div style={{ border: '2px dashed #cbd5e1', borderRadius: '8px', padding: '30px', textAlign: 'center', backgroundColor: 'var(--bg-main)' }}>
-                                            <input 
-                                                type="file" 
-                                                accept=".xlsx" 
-                                                id="importUpload" 
-                                                style={{ display: 'none' }} 
+                                            <input
+                                                type="file"
+                                                accept=".xlsx"
+                                                id="importUpload"
+                                                style={{ display: 'none' }}
                                                 onChange={(e) => {
-                                                    if(e.target.files && e.target.files.length > 0) {
+                                                    if (e.target.files && e.target.files.length > 0) {
                                                         setImportFile(e.target.files[0]);
                                                         setImportError('');
                                                     }
@@ -2438,8 +2382,8 @@ const AdminDashboard = ({ user, setUser }) => {
                                         </div>
 
                                         <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-                                            <button 
-                                                className="btn force-white-text" 
+                                            <button
+                                                className="btn force-white-text"
                                                 disabled={!importFile || isUploading}
                                                 onClick={async () => {
                                                     setIsUploading(true);
@@ -2495,28 +2439,28 @@ const AdminDashboard = ({ user, setUser }) => {
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '12px', marginBottom: '12px' }}>
                                         <input type="text" className="form-control" required placeholder="Full Name" value={userFormData.name} onChange={e => setUserFormData({ ...userFormData, name: e.target.value })} style={{ fontSize: '11px', padding: '8px' }} />
-                                        <input 
-                                            type="text" 
-                                            className="form-control" 
-                                            required 
-                                            placeholder="Phone Number (10 digits)" 
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            required
+                                            placeholder="Phone Number (10 digits)"
                                             maxLength={10}
                                             pattern="[0-9]{10}"
                                             title="Please enter a valid 10-digit mobile number"
-                                            value={userFormData.phone || ''} 
+                                            value={userFormData.phone || ''}
                                             onChange={e => {
                                                 const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
                                                 setUserFormData({ ...userFormData, phone: digitsOnly });
-                                            }} 
-                                            style={{ fontSize: '11px', padding: '8px' }} 
+                                            }}
+                                            style={{ fontSize: '11px', padding: '8px' }}
                                         />
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                                        <select 
-                                            className="form-control" 
-                                            required 
-                                            disabled={userFormData.role === 'Superadmin' || userFormData.role === 'Super Admin'} 
-                                            value={userFormData.role} 
+                                        <select
+                                            className="form-control"
+                                            required
+                                            disabled={userFormData.role === 'Superadmin' || userFormData.role === 'Super Admin'}
+                                            value={userFormData.role}
                                             onChange={e => {
                                                 const newRole = e.target.value;
                                                 // Clear viewer settings if role is not User
@@ -2525,7 +2469,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                                 } else {
                                                     setUserFormData({ ...userFormData, role: newRole });
                                                 }
-                                            }} 
+                                            }}
                                             style={{ fontSize: '11px', padding: '8px' }}
                                         >
                                             <option value="" disabled>Select Role</option>
@@ -2537,175 +2481,175 @@ const AdminDashboard = ({ user, setUser }) => {
                                                 <option value={userFormData.role}>{userFormData.role}</option>
                                             )}
                                         </select>
-                                        <SearchableDropdown 
-                                            options={departmentsList.map(d => d.department || d.department_name || d.Department || d['Department']).filter(Boolean)} 
-                                            value={userFormData.department} 
-                                            onChange={(val) => setUserFormData({ ...userFormData, department: val })} 
-                                            placeholder="Select Department" 
+                                        <SearchableDropdown
+                                            options={departmentsList.map(d => d.department || d.department_name || d.Department || d['Department']).filter(Boolean)}
+                                            value={userFormData.department}
+                                            onChange={(val) => setUserFormData({ ...userFormData, department: val })}
+                                            placeholder="Select Department"
                                         />
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                                         <input type="text" className="form-control" placeholder="Designation" value={userFormData.designation || ''} onChange={e => setUserFormData({ ...userFormData, designation: e.target.value })} style={{ fontSize: '11px', padding: '8px' }} />
-                                        <SearchableDropdown 
+                                        <SearchableDropdown
                                             options={[
-                                                 { value: '', label: '🚫 No Manager (None)' },
-                                                 ...usersList.filter(u => {
-                                                     if (u.employee_id === userFormData.employee_id) return false;
-                                                     if (userFormData.department) {
-                                                         const uDept = (u.department || u.department_name || u.Department || '').toString().trim().toLowerCase();
-                                                         const selDept = userFormData.department.toString().trim().toLowerCase();
-                                                         return uDept === selDept;
-                                                     }
-                                                     return true;
-                                                 }).map(u => ({ value: u.employee_id, label: getSolverDetails(u.employee_id) }))
-                                             ]} 
-                                             value={userFormData.reporting_manager || ''} 
-                                             onChange={(val) => setUserFormData({ ...userFormData, reporting_manager: val })} 
-                                             placeholder="Select Reporting Manager (Optional)" 
-                                         />
-                                     </div>
+                                                { value: '', label: '🚫 No Manager (None)' },
+                                                ...usersList.filter(u => {
+                                                    if (u.employee_id === userFormData.employee_id) return false;
+                                                    if (userFormData.department) {
+                                                        const uDept = (u.department || u.department_name || u.Department || '').toString().trim().toLowerCase();
+                                                        const selDept = userFormData.department.toString().trim().toLowerCase();
+                                                        return uDept === selDept;
+                                                    }
+                                                    return true;
+                                                }).map(u => ({ value: u.employee_id, label: getSolverDetails(u.employee_id) }))
+                                            ]}
+                                            value={userFormData.reporting_manager || ''}
+                                            onChange={(val) => setUserFormData({ ...userFormData, reporting_manager: val })}
+                                            placeholder="Select Reporting Manager (Optional)"
+                                        />
+                                    </div>
 
-                                     {/* VIEWER PRIVILEGES & LOCATION ASSIGNMENT - STRICTLY FOR 'User' ROLE ONLY */}
-                                     {userFormData.role === 'User' && (
-                                         <div style={{ padding: '10px 12px', backgroundColor: 'var(--bg-main, #18181b)', border: '1px solid var(--border)', borderRadius: '6px', marginBottom: '12px' }}>
-                                             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', color: 'var(--text-main)' }}>
-                                                 <input 
-                                                     type="checkbox" 
-                                                     checked={(userFormData.secondary_roles || '').split(',').map(s => s.trim()).includes('Viewer')}
-                                                     onChange={e => {
-                                                         const isChecked = e.target.checked;
-                                                         let sec = (userFormData.secondary_roles || '').split(',').map(s => s.trim()).filter(Boolean);
-                                                         if (isChecked) {
-                                                             if (!sec.includes('Viewer')) sec.push('Viewer');
-                                                             setUserFormData({ ...userFormData, secondary_roles: sec.join(','), viewer_locations: userFormData.viewer_locations || 'ALL' });
-                                                         } else {
-                                                             sec = sec.filter(r => r !== 'Viewer');
-                                                             setUserFormData({ ...userFormData, secondary_roles: sec.join(','), viewer_locations: '' });
-                                                         }
-                                                     }}
-                                                     style={{ cursor: 'pointer' }}
-                                                 />
-                                                 <span>Enable Viewer Dashboard & Analytics Rights</span>
-                                             </label>
-                                             
-                                             {((userFormData.secondary_roles || '').split(',').map(s => s.trim()).includes('Viewer')) && (
-                                                 <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
-                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                                         <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Assigned Locations for Viewer Access:</span>
-                                                         <label style={{ fontSize: '10px', color: '#3b82f6', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                             <input 
-                                                                 type="checkbox"
-                                                                 checked={(userFormData.viewer_locations || '').trim().toUpperCase() === 'ALL'}
-                                                                 onChange={e => {
-                                                                     setUserFormData({ ...userFormData, viewer_locations: e.target.checked ? 'ALL' : '' });
-                                                                 }}
-                                                             />
-                                                             All Locations (Global)
-                                                         </label>
-                                                     </div>
+                                    {/* VIEWER PRIVILEGES & LOCATION ASSIGNMENT - STRICTLY FOR 'User' ROLE ONLY */}
+                                    {userFormData.role === 'User' && (
+                                        <div style={{ padding: '10px 12px', backgroundColor: 'var(--bg-main, #18181b)', border: '1px solid var(--border)', borderRadius: '6px', marginBottom: '12px' }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', color: 'var(--text-main)' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={(userFormData.secondary_roles || '').split(',').map(s => s.trim()).includes('Viewer')}
+                                                    onChange={e => {
+                                                        const isChecked = e.target.checked;
+                                                        let sec = (userFormData.secondary_roles || '').split(',').map(s => s.trim()).filter(Boolean);
+                                                        if (isChecked) {
+                                                            if (!sec.includes('Viewer')) sec.push('Viewer');
+                                                            setUserFormData({ ...userFormData, secondary_roles: sec.join(','), viewer_locations: userFormData.viewer_locations || 'ALL' });
+                                                        } else {
+                                                            sec = sec.filter(r => r !== 'Viewer');
+                                                            setUserFormData({ ...userFormData, secondary_roles: sec.join(','), viewer_locations: '' });
+                                                        }
+                                                    }}
+                                                    style={{ cursor: 'pointer' }}
+                                                />
+                                                <span>Enable Viewer Dashboard & Analytics Rights</span>
+                                            </label>
 
-                                                     {((userFormData.viewer_locations || '').trim().toUpperCase() !== 'ALL' && (userFormData.viewer_locations || '').trim() !== '') && (
-                                                         <div style={{ fontSize: '10px', color: '#10b981', marginBottom: '8px', wordBreak: 'break-word' }}>
-                                                             Selected: {userFormData.viewer_locations}
-                                                         </div>
-                                                     )}
+                                            {((userFormData.secondary_roles || '').split(',').map(s => s.trim()).includes('Viewer')) && (
+                                                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Assigned Locations for Viewer Access:</span>
+                                                        <label style={{ fontSize: '10px', color: '#3b82f6', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={(userFormData.viewer_locations || '').trim().toUpperCase() === 'ALL'}
+                                                                onChange={e => {
+                                                                    setUserFormData({ ...userFormData, viewer_locations: e.target.checked ? 'ALL' : '' });
+                                                                }}
+                                                            />
+                                                            All Locations (Global)
+                                                        </label>
+                                                    </div>
 
-                                                     {((userFormData.viewer_locations || '').trim().toUpperCase() !== 'ALL') && (
-                                                         <div>
-                                                             {/* PROJECT FILTER DROPDOWN */}
-                                                             <div style={{ marginBottom: '8px' }}>
-                                                                 <select
-                                                                     className="form-control"
-                                                                     value={viewerSelectedProject}
-                                                                     onChange={e => setViewerSelectedProject(e.target.value)}
-                                                                     style={{ fontSize: '10px', padding: '6px 8px', width: '100%' }}
-                                                                 >
-                                                                     <option value="">-- Filter by Project --</option>
-                                                                     {Array.from(new Set(locationsList.map(l => l.project).filter(Boolean))).sort().map(p => (
-                                                                         <option key={p} value={p}>{p}</option>
-                                                                     ))}
-                                                                 </select>
-                                                             </div>
+                                                    {((userFormData.viewer_locations || '').trim().toUpperCase() !== 'ALL' && (userFormData.viewer_locations || '').trim() !== '') && (
+                                                        <div style={{ fontSize: '10px', color: '#10b981', marginBottom: '8px', wordBreak: 'break-word' }}>
+                                                            Selected: {userFormData.viewer_locations}
+                                                        </div>
+                                                    )}
 
-                                                             {/* SELECT ALL LOCATIONS FOR SELECTED PROJECT / GLOBAL */}
-                                                             {viewerSelectedProject && (
-                                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '0 2px' }}>
-                                                                     {(() => {
-                                                                         const projLocs = locationsList.filter(l => l.project === viewerSelectedProject).map(l => l.location);
-                                                                         const currentLocs = (userFormData.viewer_locations || '').split(',').map(l => l.trim()).filter(Boolean);
-                                                                         const areAllSelected = projLocs.length > 0 && projLocs.every(l => currentLocs.includes(l));
-                                                                         return (
-                                                                             <label style={{ fontSize: '10px', color: '#60a5fa', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                                 <input 
-                                                                                     type="checkbox"
-                                                                                     checked={areAllSelected}
-                                                                                     onChange={e => {
-                                                                                         let updated = [...currentLocs];
-                                                                                         if (e.target.checked) {
-                                                                                             projLocs.forEach(pl => { if (!updated.includes(pl)) updated.push(pl); });
-                                                                                         } else {
-                                                                                             updated = updated.filter(l => !projLocs.includes(l));
-                                                                                         }
-                                                                                         setUserFormData({ ...userFormData, viewer_locations: updated.join(', ') });
-                                                                                     }}
-                                                                                 />
-                                                                                 Select All {viewerSelectedProject} Locations ({projLocs.length})
-                                                                             </label>
-                                                                         );
-                                                                     })()}
-                                                                 </div>
-                                                             )}
+                                                    {((userFormData.viewer_locations || '').trim().toUpperCase() !== 'ALL') && (
+                                                        <div>
+                                                            {/* PROJECT FILTER DROPDOWN */}
+                                                            <div style={{ marginBottom: '8px' }}>
+                                                                <select
+                                                                    className="form-control"
+                                                                    value={viewerSelectedProject}
+                                                                    onChange={e => setViewerSelectedProject(e.target.value)}
+                                                                    style={{ fontSize: '10px', padding: '6px 8px', width: '100%' }}
+                                                                >
+                                                                    <option value="">-- Filter by Project --</option>
+                                                                    {Array.from(new Set(locationsList.map(l => l.project).filter(Boolean))).sort().map(p => (
+                                                                        <option key={p} value={p}>{p}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
 
-                                                             {/* LOCATIONS LIST */}
-                                                             <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: '4px', padding: '6px', backgroundColor: 'var(--bg-card)', borderRadius: '4px', border: '1px solid var(--border)' }}>
-                                                                 {(() => {
-                                                                     const displayedLocs = viewerSelectedProject 
-                                                                         ? locationsList.filter(l => l.project === viewerSelectedProject)
-                                                                         : locationsList;
+                                                            {/* SELECT ALL LOCATIONS FOR SELECTED PROJECT / GLOBAL */}
+                                                            {viewerSelectedProject && (
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', padding: '0 2px' }}>
+                                                                    {(() => {
+                                                                        const projLocs = locationsList.filter(l => l.project === viewerSelectedProject).map(l => l.location);
+                                                                        const currentLocs = (userFormData.viewer_locations || '').split(',').map(l => l.trim()).filter(Boolean);
+                                                                        const areAllSelected = projLocs.length > 0 && projLocs.every(l => currentLocs.includes(l));
+                                                                        return (
+                                                                            <label style={{ fontSize: '10px', color: '#60a5fa', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={areAllSelected}
+                                                                                    onChange={e => {
+                                                                                        let updated = [...currentLocs];
+                                                                                        if (e.target.checked) {
+                                                                                            projLocs.forEach(pl => { if (!updated.includes(pl)) updated.push(pl); });
+                                                                                        } else {
+                                                                                            updated = updated.filter(l => !projLocs.includes(l));
+                                                                                        }
+                                                                                        setUserFormData({ ...userFormData, viewer_locations: updated.join(', ') });
+                                                                                    }}
+                                                                                />
+                                                                                Select All {viewerSelectedProject} Locations ({projLocs.length})
+                                                                            </label>
+                                                                        );
+                                                                    })()}
+                                                                </div>
+                                                            )}
 
-                                                                     if (displayedLocs.length === 0) {
-                                                                         return <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>No locations found.</div>;
-                                                                     }
+                                                            {/* LOCATIONS LIST */}
+                                                            <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: '4px', padding: '6px', backgroundColor: 'var(--bg-card)', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                                                                {(() => {
+                                                                    const displayedLocs = viewerSelectedProject
+                                                                        ? locationsList.filter(l => l.project === viewerSelectedProject)
+                                                                        : locationsList;
 
-                                                                     return displayedLocs.map(loc => {
-                                                                         const locName = loc.location;
-                                                                         const currentLocs = (userFormData.viewer_locations || '').split(',').map(l => l.trim()).filter(Boolean);
-                                                                         const isSelected = currentLocs.includes(locName);
-                                                                         return (
-                                                                             <button
-                                                                                 key={locName}
-                                                                                 type="button"
-                                                                                 onClick={() => {
-                                                                                     let updated;
-                                                                                     if (isSelected) {
-                                                                                         updated = currentLocs.filter(l => l !== locName);
-                                                                                     } else {
-                                                                                         updated = [...currentLocs, locName];
-                                                                                     }
-                                                                                     setUserFormData({ ...userFormData, viewer_locations: updated.join(', ') });
-                                                                                 }}
-                                                                                 style={{
-                                                                                     fontSize: '9.5px',
-                                                                                     padding: '2px 8px',
-                                                                                     borderRadius: '4px',
-                                                                                     border: isSelected ? '1px solid #3b82f6' : '1px solid var(--border)',
-                                                                                     backgroundColor: isSelected ? 'rgba(59,130,246,0.2)' : 'transparent',
-                                                                                     color: isSelected ? '#60a5fa' : 'var(--text-muted)',
-                                                                                     cursor: 'pointer'
-                                                                                 }}
-                                                                             >
-                                                                                 {isSelected ? '✓ ' : '+ '}{locName}
-                                                                             </button>
-                                                                         );
-                                                                     });
-                                                                 })()}
-                                                             </div>
-                                                         </div>
-                                                     )}
-                                                 </div>
-                                             )}
-                                         </div>
-                                     )}
+                                                                    if (displayedLocs.length === 0) {
+                                                                        return <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>No locations found.</div>;
+                                                                    }
+
+                                                                    return displayedLocs.map(loc => {
+                                                                        const locName = loc.location;
+                                                                        const currentLocs = (userFormData.viewer_locations || '').split(',').map(l => l.trim()).filter(Boolean);
+                                                                        const isSelected = currentLocs.includes(locName);
+                                                                        return (
+                                                                            <button
+                                                                                key={locName}
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    let updated;
+                                                                                    if (isSelected) {
+                                                                                        updated = currentLocs.filter(l => l !== locName);
+                                                                                    } else {
+                                                                                        updated = [...currentLocs, locName];
+                                                                                    }
+                                                                                    setUserFormData({ ...userFormData, viewer_locations: updated.join(', ') });
+                                                                                }}
+                                                                                style={{
+                                                                                    fontSize: '9.5px',
+                                                                                    padding: '2px 8px',
+                                                                                    borderRadius: '4px',
+                                                                                    border: isSelected ? '1px solid #3b82f6' : '1px solid var(--border)',
+                                                                                    backgroundColor: isSelected ? 'rgba(59,130,246,0.2)' : 'transparent',
+                                                                                    color: isSelected ? '#60a5fa' : 'var(--text-muted)',
+                                                                                    cursor: 'pointer'
+                                                                                }}
+                                                                            >
+                                                                                {isSelected ? '✓ ' : '+ '}{locName}
+                                                                            </button>
+                                                                        );
+                                                                    });
+                                                                })()}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
                                         <button type="button" className="btn" onClick={() => setIsUserModalOpen(false)} style={{ backgroundColor: 'transparent', border: '1px solid #3f3f46', fontSize: '11px', padding: '6px 10px' }}>Cancel</button>
                                         <button type="submit" className="btn" style={{ backgroundColor: '#3b82f6', fontSize: '11px', padding: '6px 10px' }}>Save</button>
@@ -3164,7 +3108,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                         if (log.action.includes('Created')) { Icon = PlusCircle; iconColor = '#10b981'; }
                                         else if (log.action.includes('Escalated')) { Icon = ArrowUpRight; iconColor = '#ef4444'; }
                                         else if (log.action.includes('Status')) { Icon = RefreshCw; iconColor = '#f59e0b'; }
-                                            else if (log.action === 'Chat' || log.action === 'Message') { Icon = MessageSquare; iconColor = '#a855f7'; }
+                                        else if (log.action === 'Chat' || log.action === 'Message') { Icon = MessageSquare; iconColor = '#a855f7'; }
                                         else if (log.action.includes('Resolved') || log.action.includes('Accepted') || log.action.includes('Closed')) { Icon = CheckCircle; iconColor = '#10b981'; }
                                         else if (log.action.includes('Handover') || log.action.includes('Assigned')) { Icon = UserPlus; iconColor = '#8b5cf6'; }
                                         let toName = "";
@@ -3302,7 +3246,7 @@ const AdminDashboard = ({ user, setUser }) => {
 
                 </div>
             )}
-        
+
             {showAdvancedSearchModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '125vw', height: '125vh', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <div style={{ backgroundColor: 'var(--bg-card)', padding: '24px', borderRadius: '12px', width: '90%', maxWidth: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', border: '1px solid var(--border)' }}>
@@ -3313,53 +3257,53 @@ const AdminDashboard = ({ user, setUser }) => {
                         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             <div>
                                 <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Search Keyword</label>
-                                <input type="text" className="form-control" style={{ fontSize: '13px', padding: '8px' }} placeholder="Filter by ID, Dept, Status..." value={tempFilters.search} onChange={e => setTempFilters({...tempFilters, search: e.target.value})} />
+                                <input type="text" className="form-control" style={{ fontSize: '13px', padding: '8px' }} placeholder="Filter by ID, Dept, Status..." value={tempFilters.search} onChange={e => setTempFilters({ ...tempFilters, search: e.target.value })} />
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                                 <div>
                                     <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Department</label>
-                                    <select className="form-control" style={{ fontSize: '13px', padding: '8px' }} value={tempFilters.dept} onChange={e => setTempFilters({...tempFilters, dept: e.target.value})}>
+                                    <select className="form-control" style={{ fontSize: '13px', padding: '8px' }} value={tempFilters.dept} onChange={e => setTempFilters({ ...tempFilters, dept: e.target.value })}>
                                         <option value="">All Depts</option>
                                         {[...new Set(ageingData.map(a => a.dept_assigned).filter(Boolean))].sort().map(d => <option key={d} value={d}>{d}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Status</label>
-                                    <select className="form-control" style={{ fontSize: '13px', padding: '8px' }} value={tempFilters.status} onChange={e => setTempFilters({...tempFilters, status: e.target.value})}>
+                                    <select className="form-control" style={{ fontSize: '13px', padding: '8px' }} value={tempFilters.status} onChange={e => setTempFilters({ ...tempFilters, status: e.target.value })}>
                                         <option value="">All Statuses</option>
                                         {[...new Set(ageingData.map(a => a.status).filter(Boolean))].sort().map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Location</label>
-                                    <select className="form-control" style={{ fontSize: '13px', padding: '8px' }} value={tempFilters.location} onChange={e => setTempFilters({...tempFilters, location: e.target.value})}>
+                                    <select className="form-control" style={{ fontSize: '13px', padding: '8px' }} value={tempFilters.location} onChange={e => setTempFilters({ ...tempFilters, location: e.target.value })}>
                                         <option value="">All Locations</option>
                                         {[...new Set(ageingData.map(a => a.location).filter(Boolean))].sort().map(l => <option key={l} value={l}>{l}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Issue Category</label>
-                                    <select className="form-control" style={{ fontSize: '13px', padding: '8px' }} value={tempFilters.issueCat} onChange={e => setTempFilters({...tempFilters, issueCat: e.target.value})}>
+                                    <select className="form-control" style={{ fontSize: '13px', padding: '8px' }} value={tempFilters.issueCat} onChange={e => setTempFilters({ ...tempFilters, issueCat: e.target.value })}>
                                         <option value="">All Issue Cats</option>
                                         {[...new Set(ageingData.map(a => a.issue_category).filter(Boolean))].sort().map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Escalation Level</label>
-                                    <select className="form-control" style={{ fontSize: '13px', padding: '8px' }} value={tempFilters.level} onChange={e => setTempFilters({...tempFilters, level: e.target.value})}>
+                                    <select className="form-control" style={{ fontSize: '13px', padding: '8px' }} value={tempFilters.level} onChange={e => setTempFilters({ ...tempFilters, level: e.target.value })}>
                                         <option value="">All Levels</option>
                                         {[...new Set(ageingData.map(a => a.escalation_level).filter(Boolean))].sort().map(l => <option key={l} value={l}>{l}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Severity</label>
-                                    <select className="form-control" style={{ fontSize: '13px', padding: '8px' }} value={tempFilters.severity} onChange={e => setTempFilters({...tempFilters, severity: e.target.value})}>
+                                    <select className="form-control" style={{ fontSize: '13px', padding: '8px' }} value={tempFilters.severity} onChange={e => setTempFilters({ ...tempFilters, severity: e.target.value })}>
                                         <option value="">All Severities</option>
                                         {[...new Set(ageingData.map(a => a.severity).filter(Boolean))].sort().map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
                                 </div>
                             </div>
-                            
+
                             <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
                                 <button className="btn badge-primary" style={{ flex: 1, justifyContent: 'center', padding: '10px' }} onClick={() => {
                                     setAgeingSearch(tempFilters.search);

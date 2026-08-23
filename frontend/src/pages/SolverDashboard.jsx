@@ -314,14 +314,25 @@ const SolverDashboard = ({ user, setUser }) => {
 
     useEffect(() => {
         if (isEscalateModalOpen && selectedTicket?.description) {
-            api.post('/tickets/smart_suggest', { 
+            api.post('/tickets/smart_suggest', {
                 query: selectedTicket.description,
-                current_solver_emp_id: selectedTicket.assigned_to 
+                current_solver_emp_id: selectedTicket.assigned_to
             })
                 .then(res => {
                     if (res.data) {
                         setSmartEscalationSuggestions(res.data.suggested_categories || null);
-                        setTopEscalationOptions(res.data.top_escalation_options || []);
+                        const rawOptions = res.data.top_escalation_options || [];
+                        const filtered = rawOptions.map(opt => {
+                            const solverId = String(opt.solver_emp_id || opt.solver_email || '').trim().toLowerCase();
+                            const isRestricted = restrictedUserIdentifiers.has(solverId) ||
+                                (opt.solver_emp_id && restrictedUserIdentifiers.has(String(opt.solver_emp_id).toLowerCase())) ||
+                                (opt.solver_email && restrictedUserIdentifiers.has(String(opt.solver_email).toLowerCase()));
+                            if (isRestricted) {
+                                return { ...opt, solver_emp_id: '', solver_email: '', solver_name: '' };
+                            }
+                            return opt;
+                        });
+                        setTopEscalationOptions(filtered);
                     }
                 })
                 .catch(err => console.error("Escalation smart suggest error:", err));
@@ -329,24 +340,31 @@ const SolverDashboard = ({ user, setUser }) => {
             setSmartEscalationSuggestions(null);
             setTopEscalationOptions([]);
         }
-    }, [isEscalateModalOpen, selectedTicket]);
+    }, [isEscalateModalOpen, selectedTicket, restrictedUserIdentifiers]);
 
     useEffect(() => {
         if (isHandoverModalOpen && selectedTicket?.description) {
-            api.post('/tickets/smart_suggest', { 
+            api.post('/tickets/smart_suggest', {
                 query: selectedTicket.description,
-                current_solver_emp_id: selectedTicket.assigned_to 
+                current_solver_emp_id: selectedTicket.assigned_to
             })
                 .then(res => {
                     if (res.data) {
-                        setSmartHandoverSuggestions(res.data.suggested_categories || null);
+                        const cats = res.data.suggested_categories;
+                        if (cats && cats.assigned_to) {
+                            const solverId = String(cats.assigned_to).trim().toLowerCase();
+                            if (restrictedUserIdentifiers.has(solverId)) {
+                                cats.assigned_to = '';
+                            }
+                        }
+                        setSmartHandoverSuggestions(cats || null);
                     }
                 })
                 .catch(err => console.error("Handover smart suggest error:", err));
         } else {
             setSmartHandoverSuggestions(null);
         }
-    }, [isHandoverModalOpen, selectedTicket]);
+    }, [isHandoverModalOpen, selectedTicket, restrictedUserIdentifiers]);
 
     useEffect(() => {
         loadDashboardData();
@@ -669,19 +687,57 @@ const SolverDashboard = ({ user, setUser }) => {
 
     const uniqueDepts = (Array.isArray(departments) && departments.length > 0) ? departments.map(d => d.department) : [...new Set((usersList || []).map(u => u.department).filter(Boolean))];
 
+    const restrictedUserIdentifiers = useMemo(() => {
+        if (!selectedTicket || !selectedTicket.ticket_id) return new Set();
+        const restricted = new Set();
+        const relatedTickets = tickets.filter(t => String(t.ticket_id) === String(selectedTicket.ticket_id));
+        const rawList = [];
+        relatedTickets.forEach(t => {
+            if (t.raised_by) rawList.push(String(t.raised_by));
+            if (t.assigned_to) rawList.push(String(t.assigned_to));
+            if (t.original_raiser) rawList.push(String(t.original_raiser));
+        });
+        if (selectedTicket.raised_by) rawList.push(String(selectedTicket.raised_by));
+        if (selectedTicket.assigned_to) rawList.push(String(selectedTicket.assigned_to));
+        if (selectedTicket.original_raiser) rawList.push(String(selectedTicket.original_raiser));
+
+        rawList.forEach(val => {
+            const strVal = String(val).trim();
+            if (strVal && !['nan', 'none', '', 'unassigned'].includes(strVal.toLowerCase())) {
+                restricted.add(strVal.toLowerCase());
+                const u = usersList.find(usr => String(usr.employee_id) === strVal || String(usr.email).toLowerCase() === strVal.toLowerCase());
+                if (u) {
+                    if (u.employee_id) restricted.add(String(u.employee_id).toLowerCase());
+                    if (u.email) restricted.add(String(u.email).toLowerCase());
+                }
+            }
+        });
+        return restricted;
+    }, [tickets, selectedTicket, usersList]);
+
     const handoverSolverOptions = useMemo(() => {
         if (!handoverDept) return [];
         return usersList
-            .filter(u => u.department === handoverDept && !['Admin', 'Superadmin', 'Super Admin', 'Viewer'].includes(u.role) && String(u.employee_id) !== String(selectedTicket?.original_raiser || selectedTicket?.raised_by))
+            .filter(u => {
+                if (u.department !== handoverDept) return false;
+                if (['Admin', 'Superadmin', 'Super Admin', 'Viewer'].includes(u.role)) return false;
+                if (restrictedUserIdentifiers.has(String(u.employee_id).toLowerCase()) || restrictedUserIdentifiers.has(String(u.email || '').toLowerCase())) return false;
+                return true;
+            })
             .map(u => ({ label: `${u.name} (${u.phone_number || u.phone || u.employee_id})`, value: u.employee_id }));
-    }, [usersList, handoverDept, selectedTicket]);
+    }, [usersList, handoverDept, restrictedUserIdentifiers]);
 
     const escalateSolverOptions = useMemo(() => {
         if (!escalateDept) return [];
         return usersList
-            .filter(u => u.department === escalateDept && !['Admin', 'Superadmin', 'Super Admin', 'Viewer'].includes(u.role) && String(u.employee_id) !== String(selectedTicket?.original_raiser || selectedTicket?.raised_by))
+            .filter(u => {
+                if (u.department !== escalateDept) return false;
+                if (['Admin', 'Superadmin', 'Super Admin', 'Viewer'].includes(u.role)) return false;
+                if (restrictedUserIdentifiers.has(String(u.employee_id).toLowerCase()) || restrictedUserIdentifiers.has(String(u.email || '').toLowerCase())) return false;
+                return true;
+            })
             .map(u => ({ label: `${u.name} (${u.role})`, value: u.email }));
-    }, [usersList, escalateDept, selectedTicket]);
+    }, [usersList, escalateDept, restrictedUserIdentifiers]);
 
     const myTasks = tickets.filter(t => {
         const assignedRaw = String(t.assigned_to);
@@ -896,47 +952,47 @@ const SolverDashboard = ({ user, setUser }) => {
                                 <tr><td colSpan="10" className="text-center p-4 text-muted">No tasks found.</td></tr>
                             ) : (
                                 sorted.map(t => (
-                                <tr
-                                    key={`${t.ticket_id}-${t.escalation_level || 'L1'}`}
-                                    className="clickable"
-                                    onClick={() => handleTicketClick(t)}
-                                    style={{ borderLeft: t.status !== 'Closed' && t.status !== 'Resolved' ? '2px solid #ef4444' : '2px solid transparent' }}
-                                >
-                                    <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }} className="font-bold">
-                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
-                                             <span style={{ color: (isLate(t) || t.SLA_Breach === 'True' || t.SLA_Breach === true) ? '#ef4444' : 'inherit' }}>#{t.ticket_id}</span>
-                                             {t.original_raiser && <span style={{ color: '#f59e0b', fontSize: '8px', fontWeight: 'normal', backgroundColor: 'rgba(245,158,11,0.1)', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap', display: 'inline-block' }}>L{t.escalation_level ? String(t.escalation_level).replace('L', '') : '1'} Sub-task</span>}
-                                         </div>
-                                    </td>
-                                     <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                                         <AttachmentBadge attachment={t.attachment} />
-                                     </td>
-                                    <td style={{ padding: '12px 8px' }}>{t.dept_assigned}</td>
-                                    <td style={{ padding: '12px 8px' }}>{t.issue_category}</td>
-                                    <td style={{ padding: '12px 8px' }}>{t.activity_category || '-'}</td>
-                                    <td style={{ padding: '12px 8px', maxWidth: '200px', minWidth: '150px' }} title={t.description || ''}>
-                                        <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.4', wordBreak: 'break-word', fontSize: '10.5px', color: '#a1a1aa' }}>
-                                            {t.description || '-'}
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '12px 8px' }}>{t.location}</td>
-                                    <td style={{ padding: '12px 8px' }} className="text-primary">{getSolverDetails(t.assigned_to) || '-'}</td>
-                                    <td style={{ padding: '12px 8px' }}>{t.severity || '-'}</td>
-                                    <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                            <span style={{ backgroundColor: t.status === 'Escalated' ? 'rgba(239, 68, 68, 0.1)' : t.status === 'Closed' ? '#27272a' : t.status === 'Resolved' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)', color: t.status === 'Escalated' ? '#ef4444' : t.status === 'Closed' ? '#a1a1aa' : t.status === 'Resolved' ? '#10b981' : '#60a5fa', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>{t.status}</span>
-                                            <SLACountdownBadge deadline={t.deadline} status={t.status} />
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+                                    <tr
+                                        key={`${t.ticket_id}-${t.escalation_level || 'L1'}`}
+                                        className="clickable"
+                                        onClick={() => handleTicketClick(t)}
+                                        style={{ borderLeft: t.status !== 'Closed' && t.status !== 'Resolved' ? '2px solid #ef4444' : '2px solid transparent' }}
+                                    >
+                                        <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }} className="font-bold">
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                                                <span style={{ color: (isLate(t) || t.SLA_Breach === 'True' || t.SLA_Breach === true) ? '#ef4444' : 'inherit' }}>#{t.ticket_id}</span>
+                                                {t.original_raiser && <span style={{ color: '#f59e0b', fontSize: '8px', fontWeight: 'normal', backgroundColor: 'rgba(245,158,11,0.1)', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap', display: 'inline-block' }}>L{t.escalation_level ? String(t.escalation_level).replace('L', '') : '1'} Sub-task</span>}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                                            <AttachmentBadge attachment={t.attachment} />
+                                        </td>
+                                        <td style={{ padding: '12px 8px' }}>{t.dept_assigned}</td>
+                                        <td style={{ padding: '12px 8px' }}>{t.issue_category}</td>
+                                        <td style={{ padding: '12px 8px' }}>{t.activity_category || '-'}</td>
+                                        <td style={{ padding: '12px 8px', maxWidth: '200px', minWidth: '150px' }} title={t.description || ''}>
+                                            <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.4', wordBreak: 'break-word', fontSize: '10.5px', color: '#a1a1aa' }}>
+                                                {t.description || '-'}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '12px 8px' }}>{t.location}</td>
+                                        <td style={{ padding: '12px 8px' }} className="text-primary">{getSolverDetails(t.assigned_to) || '-'}</td>
+                                        <td style={{ padding: '12px 8px' }}>{t.severity || '-'}</td>
+                                        <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                                <span style={{ backgroundColor: t.status === 'Escalated' ? 'rgba(239, 68, 68, 0.1)' : t.status === 'Closed' ? '#27272a' : t.status === 'Resolved' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)', color: t.status === 'Escalated' ? '#ef4444' : t.status === 'Closed' ? '#a1a1aa' : t.status === 'Resolved' ? '#10b981' : '#60a5fa', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>{t.status}</span>
+                                                <SLACountdownBadge deadline={t.deadline} status={t.status} />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
-    );
-};
+        );
+    };
 
 
     const handleTabChange = (newTab) => {
@@ -953,14 +1009,14 @@ const SolverDashboard = ({ user, setUser }) => {
                             <Zap size={22} color="#f59e0b" /> Solver Workspace
                         </h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <button 
-                                className="btn p-2 text-xs flex-row gap-1" 
-                                onClick={() => setShowKPIs(prev => !prev)} 
+                            <button
+                                className="btn p-2 text-xs flex-row gap-1"
+                                onClick={() => setShowKPIs(prev => !prev)}
                                 title={showKPIs ? "Hide KPI Cards" : "Show KPI Cards"}
-                                style={{ 
-                                    whiteSpace: 'nowrap', 
-                                    borderRadius: '6px', 
-                                    backgroundColor: 'var(--bg-card, #131b2e)', 
+                                style={{
+                                    whiteSpace: 'nowrap',
+                                    borderRadius: '6px',
+                                    backgroundColor: 'var(--bg-card, #131b2e)',
                                     border: '1px solid var(--border, #1e293b)',
                                     color: 'var(--text-main, #f1f5f9)',
                                     fontSize: '11px',
@@ -983,45 +1039,45 @@ const SolverDashboard = ({ user, setUser }) => {
                 {showKPIs && (
                     <div className="kpi-grid">
                         <div className="card kpi-card kpi-blue" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #3b82f6', background: 'linear-gradient(180deg, rgba(59,130,246,0.25) 0%, rgba(59,130,246,0) 100%)' }}>
-                        {renderTooltip(solverKPI.total.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Total</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.total.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-amber" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #f59e0b', background: 'linear-gradient(180deg, rgba(245,158,11,0.25) 0%, rgba(245,158,11,0) 100%)' }}>
-                        {renderTooltip(solverKPI.open.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Open</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.open.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-purple" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #8b5cf6', background: 'linear-gradient(180deg, rgba(139,92,246,0.25) 0%, rgba(139,92,246,0) 100%)' }}>
-                        {renderTooltip(solverKPI.inProgress.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>In Progress</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.inProgress.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-teal" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #14b8a6', background: 'linear-gradient(180deg, rgba(20,184,166,0.25) 0%, rgba(20,184,166,0) 100%)' }}>
-                        {renderTooltip(solverKPI.resolved.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Resolved</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.resolved.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-green" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #10b981', background: 'linear-gradient(180deg, rgba(16,185,129,0.25) 0%, rgba(16,185,129,0) 100%)' }}>
-                        {renderTooltip(solverKPI.closed.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Closed</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.closed.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-gray" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #6b7280', background: 'linear-gradient(180deg, rgba(107,114,128,0.25) 0%, rgba(107,114,128,0) 100%)' }}>
-                        {renderTooltip(solverKPI.declined.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Declined</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.declined.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-gray" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #3b82f6', background: 'linear-gradient(180deg, rgba(59,130,246,0.25) 0%, rgba(59,130,246,0) 100%)' }}>
-                        {renderTooltip(solverKPI.onHold.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>On Hold</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.onHold.count}</h2>
-                    </div>
-                    <div className="card kpi-card kpi-red" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #ef4444', background: 'linear-gradient(180deg, rgba(239,68,68,0.25) 0%, rgba(239,68,68,0) 100%)' }}>
-                        {renderTooltip(solverKPI.escalated.levels)}
-                        <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Escalate</p>
-                        <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.escalated.count}</h2>
-                    </div>
+                            {renderTooltip(solverKPI.total.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Total</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.total.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-amber" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #f59e0b', background: 'linear-gradient(180deg, rgba(245,158,11,0.25) 0%, rgba(245,158,11,0) 100%)' }}>
+                            {renderTooltip(solverKPI.open.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Open</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.open.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-purple" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #8b5cf6', background: 'linear-gradient(180deg, rgba(139,92,246,0.25) 0%, rgba(139,92,246,0) 100%)' }}>
+                            {renderTooltip(solverKPI.inProgress.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>In Progress</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.inProgress.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-teal" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #14b8a6', background: 'linear-gradient(180deg, rgba(20,184,166,0.25) 0%, rgba(20,184,166,0) 100%)' }}>
+                            {renderTooltip(solverKPI.resolved.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Resolved</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.resolved.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-green" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #10b981', background: 'linear-gradient(180deg, rgba(16,185,129,0.25) 0%, rgba(16,185,129,0) 100%)' }}>
+                            {renderTooltip(solverKPI.closed.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Closed</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.closed.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-gray" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #6b7280', background: 'linear-gradient(180deg, rgba(107,114,128,0.25) 0%, rgba(107,114,128,0) 100%)' }}>
+                            {renderTooltip(solverKPI.declined.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Declined</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.declined.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-gray" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #3b82f6', background: 'linear-gradient(180deg, rgba(59,130,246,0.25) 0%, rgba(59,130,246,0) 100%)' }}>
+                            {renderTooltip(solverKPI.onHold.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>On Hold</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.onHold.count}</h2>
+                        </div>
+                        <div className="card kpi-card kpi-red" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #ef4444', background: 'linear-gradient(180deg, rgba(239,68,68,0.25) 0%, rgba(239,68,68,0) 100%)' }}>
+                            {renderTooltip(solverKPI.escalated.levels)}
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Escalate</p>
+                            <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.escalated.count}</h2>
+                        </div>
                         <div className="card kpi-card kpi-sla kpi-orange" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #F7941D', background: 'linear-gradient(180deg, rgba(247,148,29,0.25) 0%, rgba(247,148,29,0) 100%)' }}>
                             {renderTooltip(solverKPI.late.levels)}
                             <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>SLA Breach</p>
@@ -1421,7 +1477,7 @@ const SolverDashboard = ({ user, setUser }) => {
                                                 <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '10px', paddingTop: '12px', borderTop: '1px solid var(--border, rgba(255,255,255,0.06))' }}>
                                                     <button type="submit" style={{ backgroundColor: '#10b981', color: '#ffffff', fontWeight: 'bold', fontSize: '11.5px', padding: '0 20px', height: '34px', margin: 0, borderRadius: '6px', border: '1px solid #059669', boxShadow: '0 2px 8px rgba(16, 185, 129, 0.35)', cursor: 'pointer' }}>Update Status</button>
 
-                                                    {selectedTicket.status === 'Open' && (updateForms[selectedTicket.ticket_id]?.status || selectedTicket.status) === 'In Progress' && (!selectedTicket.escalation_level || selectedTicket.escalation_level === 'L1') && (
+                                                    {selectedTicket.status === 'Open' && (updateForms[selectedTicket.ticket_id]?.status || selectedTicket.status) === 'In Progress' && (!selectedTicket.escalation_level || selectedTicket.escalation_level === 'L1') && !selectedTicket.has_extended && String(selectedTicket.has_extended).toLowerCase() !== 'true' && (
                                                         <button type="button" onClick={() => setIsExtendModalOpen(true)} style={{ fontSize: '11px', fontWeight: 'bold', padding: '0 14px', height: '34px', color: '#7c3aed', backgroundColor: 'rgba(139, 92, 246, 0.15)', border: '1px solid #8b5cf6', margin: 0, borderRadius: '6px', cursor: 'pointer', boxShadow: '0 1px 4px rgba(139, 92, 246, 0.15)' }}>Extend Deadline</button>
                                                     )}
                                                     {(selectedTicket.status === 'Open' || selectedTicket.status === 'In Progress') && !['Resolved', 'Decline', 'On Hold'].includes(updateForms[selectedTicket.ticket_id]?.status || selectedTicket.status) && (() => {
@@ -1429,24 +1485,24 @@ const SolverDashboard = ({ user, setUser }) => {
                                                         const dl = parseDateToTimestamp(selectedTicket.deadline);
                                                         const isHalfExpired = (ts && dl && dl > ts) ? (Date.now() > (ts + ((dl - ts) / 2.0))) : false;
                                                         return (
-                                                            <button 
-                                                                type="button" 
-                                                                onClick={() => { 
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
                                                                     if (isHalfExpired) {
                                                                         alert("Handover is only allowed within the first half of the SLA duration. The handover window for this ticket has expired.");
                                                                         return;
                                                                     }
-                                                                    setHandoverDept(selectedTicket?.dept_assigned || selectedTicket?.department || ''); 
-                                                                    setHandoverTarget(''); 
-                                                                    setIsHandoverModalOpen(true); 
-                                                                }} 
-                                                                style={{ 
-                                                                    fontSize: '11px', fontWeight: 'bold', padding: '0 14px', height: '34px', 
-                                                                    color: isHalfExpired ? '#71717a' : '#d97706', 
-                                                                    backgroundColor: isHalfExpired ? 'rgba(113, 113, 122, 0.1)' : 'rgba(245, 158, 11, 0.15)', 
-                                                                    border: `1px solid ${isHalfExpired ? '#3f3f46' : '#f59e0b'}`, 
-                                                                    margin: 0, borderRadius: '6px', 
-                                                                    cursor: isHalfExpired ? 'not-allowed' : 'pointer', 
+                                                                    setHandoverDept(selectedTicket?.dept_assigned || selectedTicket?.department || '');
+                                                                    setHandoverTarget('');
+                                                                    setIsHandoverModalOpen(true);
+                                                                }}
+                                                                style={{
+                                                                    fontSize: '11px', fontWeight: 'bold', padding: '0 14px', height: '34px',
+                                                                    color: isHalfExpired ? '#71717a' : '#d97706',
+                                                                    backgroundColor: isHalfExpired ? 'rgba(113, 113, 122, 0.1)' : 'rgba(245, 158, 11, 0.15)',
+                                                                    border: `1px solid ${isHalfExpired ? '#3f3f46' : '#f59e0b'}`,
+                                                                    margin: 0, borderRadius: '6px',
+                                                                    cursor: isHalfExpired ? 'not-allowed' : 'pointer',
                                                                     boxShadow: isHalfExpired ? 'none' : '0 1px 4px rgba(245, 158, 11, 0.15)',
                                                                     opacity: isHalfExpired ? 0.6 : 1
                                                                 }}
@@ -1549,7 +1605,7 @@ const SolverDashboard = ({ user, setUser }) => {
                 <div className="glass-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div className="glass-modal" style={{ padding: '20px', borderRadius: '6px', width: '420px', maxWidth: '90%' }}>
                         <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>Request Ticket Handover</h3>
-                        
+
                         {smartHandoverSuggestions && (
                             <div style={{ backgroundColor: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: '6px', padding: '10px', marginBottom: '14px' }}>
                                 <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
@@ -1587,7 +1643,7 @@ const SolverDashboard = ({ user, setUser }) => {
                                 </div>
                             </div>
                         )}
-                        
+
                         <form onSubmit={submitHandoverRequest}>
                             <div className="form-group" style={{ marginBottom: '12px', position: 'relative', zIndex: 100 }}>
                                 <label style={{ fontSize: '10px' }}>Select Target Department</label>
@@ -1634,12 +1690,12 @@ const SolverDashboard = ({ user, setUser }) => {
                                         Original Deadline: {selectedTicket.absolute_deadline?.split(' ')[0] || selectedTicket.deadline?.split(' ')[0]}
                                     </div>
                                 )}
-                                <div 
+                                <div
                                     style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}
                                     onClick={() => {
                                         const dateEl = document.getElementById('extendDeadlinePicker');
                                         if (dateEl && dateEl.showPicker) {
-                                            try { dateEl.showPicker(); } catch (err) {}
+                                            try { dateEl.showPicker(); } catch (err) { }
                                         }
                                     }}
                                 >
@@ -1649,19 +1705,19 @@ const SolverDashboard = ({ user, setUser }) => {
                                         placeholder="dd/mm/yyyy"
                                         required
                                         readOnly
-                                        style={{ 
-                                            padding: '8px 36px 8px 10px', 
-                                            fontSize: '11px', 
-                                            width: '100%', 
+                                        style={{
+                                            padding: '8px 36px 8px 10px',
+                                            fontSize: '11px',
+                                            width: '100%',
                                             cursor: 'pointer',
                                             backgroundColor: 'var(--bg-main, #18181b)'
                                         }}
                                         value={
                                             extendDeadlineDate
                                                 ? (() => {
-                                                      const p = extendDeadlineDate.split('-');
-                                                      return p.length === 3 && p[0].length === 4 ? `${p[2]}/${p[1]}/${p[0]}` : extendDeadlineDate;
-                                                  })()
+                                                    const p = extendDeadlineDate.split('-');
+                                                    return p.length === 3 && p[0].length === 4 ? `${p[2]}/${p[1]}/${p[0]}` : extendDeadlineDate;
+                                                })()
                                                 : ''
                                         }
                                     />
@@ -1714,9 +1770,9 @@ const SolverDashboard = ({ user, setUser }) => {
                                             return minDate;
                                         })()}
                                     />
-                                    <Calendar 
-                                        size={14} 
-                                        style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#a1a1aa' }} 
+                                    <Calendar
+                                        size={14}
+                                        style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#a1a1aa' }}
                                     />
                                 </div>
                                 <p style={{ fontSize: '9px', color: '#a1a1aa', marginTop: '8px' }}>Note: The reason for this extension will be pulled from the 'Remark' field on the ticket update panel.</p>
@@ -1829,12 +1885,12 @@ const SolverDashboard = ({ user, setUser }) => {
                                         Original Deadline: {selectedTicket.absolute_deadline?.split(' ')[0] || selectedTicket.deadline?.split(' ')[0]}
                                     </div>
                                 )}
-                                <div 
+                                <div
                                     style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}
                                     onClick={() => {
                                         const dateEl = document.getElementById('escalateDeadlinePicker');
                                         if (dateEl && dateEl.showPicker) {
-                                            try { dateEl.showPicker(); } catch (err) {}
+                                            try { dateEl.showPicker(); } catch (err) { }
                                         }
                                     }}
                                 >
@@ -1844,19 +1900,19 @@ const SolverDashboard = ({ user, setUser }) => {
                                         placeholder="dd/mm/yyyy"
                                         required
                                         readOnly
-                                        style={{ 
-                                            padding: '8px 36px 8px 10px', 
-                                            fontSize: '11px', 
-                                            width: '100%', 
+                                        style={{
+                                            padding: '8px 36px 8px 10px',
+                                            fontSize: '11px',
+                                            width: '100%',
                                             cursor: 'pointer',
                                             backgroundColor: 'var(--bg-main, #18181b)'
                                         }}
                                         value={
                                             escalateDeadline
                                                 ? (() => {
-                                                      const p = escalateDeadline.split('-');
-                                                      return p.length === 3 && p[0].length === 4 ? `${p[2]}/${p[1]}/${p[0]}` : escalateDeadline;
-                                                  })()
+                                                    const p = escalateDeadline.split('-');
+                                                    return p.length === 3 && p[0].length === 4 ? `${p[2]}/${p[1]}/${p[0]}` : escalateDeadline;
+                                                })()
                                                 : ''
                                         }
                                     />

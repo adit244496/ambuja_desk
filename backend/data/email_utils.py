@@ -12,7 +12,7 @@ OUTLOOK_EMAIL = os.environ.get('OUTLOOK_EMAIL')
 OUTLOOK_PASSWORD = os.environ.get('OUTLOOK_PASSWORD')
 SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp-mail.outlook.com')
 SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://issuetracker.ambujaneotia.com/')
 
 def send_ticket_email(to_email, subject, message_body, ticket_details=None, cc_emails=None, attachment_filepath=None):
     if not OUTLOOK_EMAIL or not OUTLOOK_PASSWORD:
@@ -71,7 +71,7 @@ def send_ticket_email(to_email, subject, message_body, ticket_details=None, cc_e
         
         ticket_id = ticket_details.get('Ticket ID')
         if ticket_id:
-            html_body += f"<p><a href='{FRONTEND_URL}/ticket/{ticket_id}' style='padding: 10px 15px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;'>View Ticket in Dashboard</a></p>"
+            html_body += f"<p><a href='{FRONTEND_URL}' style='padding: 10px 15px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;'>View Ticket in Dashboard</a></p>"
             
     html_body += "<br><p style='color: gray; font-size: 12px;'>This is an automated notification.</p>"
 

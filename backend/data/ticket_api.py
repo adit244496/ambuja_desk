@@ -153,12 +153,32 @@ def get_user_display(identifier, users):
             phone = match.phone_number or 'N/A'
             return f"{name} ({phone})"
             
-    return ident_str
-
-
-
-
-# ==========================================
+def get_ticket_restricted_user_identifiers(ticket_id, db, users):
+    """
+    Returns a set of normalized identifiers (lowercase emails and cleaned string employee IDs)
+    for all raisers and solvers across all hierarchy levels (L1, L2, L3...) of the ticket.
+    """
+    restricted = set()
+    all_ticket_records = db.query(Ticket).filter(Ticket.ticket_id == str(ticket_id)).all()
+    raw_identifiers = set()
+    for t in all_ticket_records:
+        for field_val in [t.raised_by, t.assigned_to, t.original_raiser]:
+            if field_val and str(field_val).strip().lower() not in ['nan', 'none', '', 'unassigned']:
+                raw_identifiers.add(str(field_val).strip())
+                
+    for raw in raw_identifiers:
+        # Add the raw value in lower
+        restricted.add(raw.lower())
+        # Also resolve both email and emp_id
+        emp_id = get_user_emp_id(raw, users)
+        if emp_id and emp_id != 'Unassigned':
+            restricted.add(str(emp_id).lower())
+            if str(emp_id).endswith('.0'):
+                restricted.add(str(emp_id)[:-2].lower())
+        email = get_user_email(raw, users)
+        if email:
+            restricted.add(email.lower())
+    return restricted
 # --- CORE TICKET ROUTES ---
 # ==========================================
 @ticket_bp.route('/api/tickets', methods=['GET'])
@@ -435,6 +455,15 @@ def escalate_ticket():
                 pass
                 
         new_solver_emp_id = str(new_solver).strip()
+        
+        # Prevent escalation to raisers or solvers across all previous levels
+        restricted_users = get_ticket_restricted_user_identifiers(ticket_id, db, users)
+        target_emp_check = get_user_emp_id(new_solver, users)
+        target_email_check = get_user_email(new_solver, users)
+        if (new_solver_emp_id.lower() in restricted_users or
+            (target_emp_check and str(target_emp_check).lower() in restricted_users) or
+            (target_email_check and str(target_email_check).lower() in restricted_users)):
+            return jsonify({"error": "Ticket cannot be escalated to a raiser or already assigned solver of any level on this ticket."}), 400
         
         new_ticket = Ticket(
             ticket_id=ticket.ticket_id,
@@ -843,6 +872,10 @@ def update_ticket_status():
             ticket.status = actual_status
             
         if new_deadline:
+            has_ext_val = str(getattr(ticket, 'has_extended', '') or '').strip().lower()
+            if has_ext_val in ['true', '1', 'yes']:
+                return jsonify({"error": "Deadline has already been extended once for this ticket. Further extensions are not permitted."}), 400
+                
             old_deadline = str(ticket.deadline or '')
             try:
                 str_nd = str(new_deadline).strip()
@@ -985,27 +1018,37 @@ def request_handover():
                 }), 400
 
         target_emp_id = get_user_emp_id(target_id, users)
+        
+        # Prevent handover to raisers or solvers across all levels
+        restricted_users = get_ticket_restricted_user_identifiers(ticket_id, db, users)
+        target_raw_check = str(target_id or '').strip()
+        target_email_check = get_user_email(target_id, users)
+        if (target_raw_check.lower() in restricted_users or
+            (target_emp_id and str(target_emp_id).lower() in restricted_users) or
+            (target_email_check and str(target_email_check).lower() in restricted_users)):
+            return jsonify({"error": "Ticket cannot be handed over to a raiser or already assigned solver of any level on this ticket."}), 400
         ticket.reassign_requested_to = target_emp_id
         ticket.reassign_reason = reason
 
         solver_raw = str(ticket.assigned_to)
         solver_email = get_user_email(solver_raw, users)
         target_email = get_user_email(target_emp_id, users)
+        raiser_raw = str(ticket.raised_by or '')
+        raiser_email = get_user_email(raiser_raw, users)
         admin_emails = database.get_admin_emails(db)
         for admin_email in admin_emails:
             database.create_notification(admin_email, f"Action Required: Handover Request from {get_user_name_dept(solver_raw, users)} for Ticket #{ticket_id} to {get_user_name_dept(target_emp_id or target_email, users)}.", role_context='Admin', action_attachment=filename)
 
+        if raiser_email:
+            database.create_notification(raiser_email, f"Update: Handover requested for your Ticket #{ticket_id} by {get_user_name_dept(solver_raw, users)} to {get_user_name_dept(target_emp_id or target_email, users)}.", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename)
 
-        cc_users_str = str(ticket.notify_users)
-        
-        notifications_to_send = []
-        def queue_notification(email, message, role_context='System', attach=filename):
-            notifications_to_send.append((email, message, role_context, attach))
+
+        cc_users_str = str(ticket.notify_users or '')
         if cc_users_str and cc_users_str.lower() not in ['nan', 'none', '']:
             for u in [u.strip() for u in cc_users_str.split(',') if u.strip()]:
                 u_email = get_user_email(u, users)
                 if u_email:
-                    database.create_notification(u_email, f"FYI: Handover requested for Ticket #{ticket_id} to {target_email or target_emp_id}.", role_context='Viewer', action_attachment=filename)
+                    database.create_notification(u_email, f"FYI: Handover requested for Ticket #{ticket_id} to {target_email or target_emp_id}.", ticket_id=ticket_id, role_context='Viewer', action_attachment=filename)
 
         database.log_ticket_action(ticket_id, solver_raw, "Handover Requested", f"Requested transfer to {target_email or target_emp_id}", reason)
         db.commit()
@@ -1083,10 +1126,14 @@ def approve_handover():
                 
                 target_email = get_user_email(target_emp_id, users)
                 solver_email = get_user_email(solver_raw, users)
+                raiser_raw = str(ticket.raised_by or '')
+                raiser_email = get_user_email(raiser_raw, users)
                 if target_email:
                     database.create_notification(target_email, f"Action Required: Ticket #{ticket_id} has been handed over to you from {get_user_name_dept(solver_raw, users)}. SLA reset to {duration_days}d ({new_dl_date}).", ticket_id=ticket_id, role_context='Solver', action_attachment=filename)
                 if solver_email:
                     database.create_notification(solver_email, f"Success: Your handover request for Ticket #{ticket_id} was approved.", ticket_id=ticket_id, role_context='Solver', action_attachment=filename)
+                if raiser_email:
+                    database.create_notification(raiser_email, f"Update: Handover of Ticket #{ticket_id} to {get_user_name_dept(target_emp_id or target_email, users)} was approved. SLA reset to {duration_days}d ({new_dl_date}).", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename)
                     
                 cc_users_str = str(ticket.notify_users or '')
                 if cc_users_str and cc_users_str.lower() not in ['nan', 'none', '']:
@@ -1110,8 +1157,12 @@ def approve_handover():
 
             try:
                 solver_email = get_user_email(solver_raw, users)
+                raiser_raw = str(ticket.raised_by or '')
+                raiser_email = get_user_email(raiser_raw, users)
                 if solver_email:
                     database.create_notification(solver_email, f"Alert: Your handover request for Ticket #{ticket_id} was REJECTED.", ticket_id=ticket_id, role_context='Solver', action_attachment=filename)
+                if raiser_email:
+                    database.create_notification(raiser_email, f"Update: Handover request for Ticket #{ticket_id} was rejected by Admin. Kept with {get_user_name_dept(solver_raw, users)}.", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename)
                 database.log_ticket_action(ticket_id, actor_email, "Handover Rejected", "Kept with original solver", "")
             except Exception as post_err:
                 print(f"Post-commit operations failed on reject (ticket already saved): {post_err}")
@@ -1147,6 +1198,16 @@ def admin_reassign_ticket():
         allowed_reassign_statuses = ['Open', 'In Progress']
         if str(ticket.status).strip() not in allowed_reassign_statuses:
             return jsonify({"error": f"Force reassign is only allowed for tickets marked Open or In Progress. Current status: {ticket.status}"}), 400
+
+        # Prevent force reassigning to raisers or solvers across all levels
+        restricted_users = get_ticket_restricted_user_identifiers(ticket_id, db, users)
+        target_raw_check = str(new_solver or '').strip()
+        target_emp_check = get_user_emp_id(new_solver, users)
+        target_email_check = get_user_email(new_solver, users)
+        if (target_raw_check.lower() in restricted_users or
+            (target_emp_check and str(target_emp_check).lower() in restricted_users) or
+            (target_email_check and str(target_email_check).lower() in restricted_users)):
+            return jsonify({"error": "Ticket cannot be reassigned to a raiser or already assigned solver of any level on this ticket."}), 400
 
         old_solver = str(ticket.assigned_to or '')
         old_timestamp = str(ticket.timestamp or '')
@@ -1200,11 +1261,22 @@ def admin_reassign_ticket():
 
             target_email = get_user_email(target_emp_str, users)
             old_solver_email = get_user_email(old_solver, users)
+            raiser_raw = str(ticket.raised_by or '')
+            raiser_email = get_user_email(raiser_raw, users)
 
             if target_email:
                 database.create_notification(target_email, f"Action Required: Ticket #{ticket_id} has been force-reassigned to you by Admin. SLA reset to {duration_days}d ({new_dl_date}). Reason: {reason}", ticket_id=ticket_id, role_context='Solver')
             if old_solver_email:
                 database.create_notification(old_solver_email, f"FYI: Ticket #{ticket_id} was reassigned to another solver by Admin.", ticket_id=ticket_id, role_context='Solver')
+            if raiser_email:
+                database.create_notification(raiser_email, f"Update: Your Ticket #{ticket_id} was reassigned by Admin to {get_user_name_dept(target_emp_str, users)}. SLA reset to {duration_days}d ({new_dl_date}). Reason: {reason}", ticket_id=ticket_id, role_context='Requestor')
+
+            cc_users_str = str(ticket.notify_users or '')
+            if cc_users_str and cc_users_str.lower() not in ['nan', 'none', '']:
+                for u in [u.strip() for u in cc_users_str.split(',') if u.strip()]:
+                    u_email = get_user_email(u, users)
+                    if u_email:
+                        database.create_notification(u_email, f"FYI: Ticket #{ticket_id} was force-reassigned by Admin to {get_user_name_dept(target_emp_str, users)}.", ticket_id=ticket_id, role_context='Viewer')
 
             log_details = f"Force reassigned from {get_user_name_dept(old_solver, users)} to {get_user_name_dept(target_emp_str, users)}. Reason: {reason}. SLA reset to {duration_days}d ({new_dl_date}) [Previous: {old_ts_date} -> {old_dl_date}]"
             database.log_ticket_action(ticket_id, admin_email, "Force Reassigned", log_details, reason)
