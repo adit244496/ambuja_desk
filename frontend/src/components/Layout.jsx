@@ -77,6 +77,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
     }, []);
 
     useEffect(() => {
+        setIsMobileMenuOpen(false);
         const timer = setTimeout(() => {
             setMountedPath(location.pathname);
             sessionStorage.setItem('lastPath', location.pathname);
@@ -520,8 +521,20 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                     </div>
                 </div>
 
-                <div style={{ padding: '16px', textAlign: 'center', zIndex: 1, position: 'relative' }}>
+                <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1, position: 'relative' }}>
                     <h2 style={{ fontSize: '13px', color: sb.text, margin: 0, fontWeight: '700', letterSpacing: '0.05em' }}>ISSUE TRACKER</h2>
+                    {isMobileMenuOpen && (
+                        <button
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            style={{
+                                background: 'transparent', border: 'none', color: sb.textMuted, cursor: 'pointer',
+                                padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            }}
+                            title="Close Sidebar"
+                        >
+                            <X size={18} />
+                        </button>
+                    )}
                 </div>
 
                 <div style={{ padding: '11px 13px', margin: '16px 13px 8px 13px', backgroundColor: sb.card, borderRadius: '8px', border: `1px solid ${sb.borderLight}` }}>
@@ -559,6 +572,8 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                                     onClick={(e) => {
                                         if (isActiveRoute) {
                                             e.preventDefault();
+                                        } else {
+                                            setIsMobileMenuOpen(false);
                                         }
                                         toggleNavMenu(link.path);
                                     }}
@@ -605,6 +620,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                                                 key={tab.id}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
+                                                    setIsMobileMenuOpen(false);
                                                     if (isActiveRoute && setActiveTab) {
                                                         setActiveTab(tab.id);
                                                     } else {
@@ -649,6 +665,26 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                     </button>
                 </div>
             </aside>
+
+            {/* MOBILE SIDEBAR BACKDROP OVERLAY */}
+            {isMobileMenuOpen && (
+                <div
+                    className="mobile-sidebar-backdrop"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                        backdropFilter: 'blur(2px)',
+                        WebkitBackdropFilter: 'blur(2px)',
+                        zIndex: 1040,
+                        cursor: 'pointer'
+                    }}
+                />
+            )}
 
             {/* MAIN DASHBOARD CONTENT AREA */}
             <div className="dashboard-wrapper main-content" style={{ marginLeft: '200px', flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden', maxWidth: '100%' }}>
