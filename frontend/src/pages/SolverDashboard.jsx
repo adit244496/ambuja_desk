@@ -312,6 +312,67 @@ const SolverDashboard = ({ user, setUser }) => {
     const [topEscalationOptions, setTopEscalationOptions] = useState([]);
     const [smartHandoverSuggestions, setSmartHandoverSuggestions] = useState(null);
 
+    const getSolverDetails = (solverId) => {
+        if (!solverId || String(solverId).toLowerCase() === 'nan' || solverId === 'Unassigned') return 'Unassigned';
+        const solver = usersList.find(u => String(u.employee_id) === String(solverId) || String(u.email) === String(solverId));
+        if (solver) return `${solver.name} (${solver.phone_number || solver.phone || 'N/A'})`;
+        return solverId;
+    };
+
+    const uniqueDepts = (Array.isArray(departments) && departments.length > 0) ? departments.map(d => d.department) : [...new Set((usersList || []).map(u => u.department).filter(Boolean))];
+
+    const restrictedUserIdentifiers = useMemo(() => {
+        if (!selectedTicket || !selectedTicket.ticket_id) return new Set();
+        const restricted = new Set();
+        const relatedTickets = tickets.filter(t => String(t.ticket_id) === String(selectedTicket.ticket_id));
+        const rawList = [];
+        relatedTickets.forEach(t => {
+            if (t.raised_by) rawList.push(String(t.raised_by));
+            if (t.assigned_to) rawList.push(String(t.assigned_to));
+            if (t.original_raiser) rawList.push(String(t.original_raiser));
+        });
+        if (selectedTicket.raised_by) rawList.push(String(selectedTicket.raised_by));
+        if (selectedTicket.assigned_to) rawList.push(String(selectedTicket.assigned_to));
+        if (selectedTicket.original_raiser) rawList.push(String(selectedTicket.original_raiser));
+
+        rawList.forEach(val => {
+            const strVal = String(val).trim();
+            if (strVal && !['nan', 'none', '', 'unassigned'].includes(strVal.toLowerCase())) {
+                restricted.add(strVal.toLowerCase());
+                const u = usersList.find(usr => String(usr.employee_id) === strVal || String(usr.email).toLowerCase() === strVal.toLowerCase());
+                if (u) {
+                    if (u.employee_id) restricted.add(String(u.employee_id).toLowerCase());
+                    if (u.email) restricted.add(String(u.email).toLowerCase());
+                }
+            }
+        });
+        return restricted;
+    }, [tickets, selectedTicket, usersList]);
+
+    const handoverSolverOptions = useMemo(() => {
+        if (!handoverDept) return [];
+        return usersList
+            .filter(u => {
+                if (u.department !== handoverDept) return false;
+                if (['Admin', 'Superadmin', 'Super Admin', 'Viewer'].includes(u.role)) return false;
+                if (restrictedUserIdentifiers.has(String(u.employee_id).toLowerCase()) || restrictedUserIdentifiers.has(String(u.email || '').toLowerCase())) return false;
+                return true;
+            })
+            .map(u => ({ label: `${u.name} (${u.phone_number || u.phone || u.employee_id})`, value: u.employee_id }));
+    }, [usersList, handoverDept, restrictedUserIdentifiers]);
+
+    const escalateSolverOptions = useMemo(() => {
+        if (!escalateDept) return [];
+        return usersList
+            .filter(u => {
+                if (u.department !== escalateDept) return false;
+                if (['Admin', 'Superadmin', 'Super Admin', 'Viewer'].includes(u.role)) return false;
+                if (restrictedUserIdentifiers.has(String(u.employee_id).toLowerCase()) || restrictedUserIdentifiers.has(String(u.email || '').toLowerCase())) return false;
+                return true;
+            })
+            .map(u => ({ label: `${u.name} (${u.role})`, value: u.email }));
+    }, [usersList, escalateDept, restrictedUserIdentifiers]);
+
     useEffect(() => {
         if (isEscalateModalOpen && selectedTicket?.description) {
             api.post('/tickets/smart_suggest', {
@@ -678,70 +739,15 @@ const SolverDashboard = ({ user, setUser }) => {
         setUpdateForms(prev => ({ ...prev, [ticketId]: { ...prev[ticketId] || {}, [field]: value } }));
     };
 
-    const getSolverDetails = (solverId) => {
-        if (!solverId || String(solverId).toLowerCase() === 'nan' || solverId === 'Unassigned') return 'Unassigned';
-        const solver = usersList.find(u => String(u.employee_id) === String(solverId) || String(u.email) === String(solverId));
-        if (solver) return `${solver.name} (${solver.phone_number || solver.phone || 'N/A'})`;
-        return solverId;
-    };
-
-    const uniqueDepts = (Array.isArray(departments) && departments.length > 0) ? departments.map(d => d.department) : [...new Set((usersList || []).map(u => u.department).filter(Boolean))];
-
-    const restrictedUserIdentifiers = useMemo(() => {
-        if (!selectedTicket || !selectedTicket.ticket_id) return new Set();
-        const restricted = new Set();
-        const relatedTickets = tickets.filter(t => String(t.ticket_id) === String(selectedTicket.ticket_id));
-        const rawList = [];
-        relatedTickets.forEach(t => {
-            if (t.raised_by) rawList.push(String(t.raised_by));
-            if (t.assigned_to) rawList.push(String(t.assigned_to));
-            if (t.original_raiser) rawList.push(String(t.original_raiser));
-        });
-        if (selectedTicket.raised_by) rawList.push(String(selectedTicket.raised_by));
-        if (selectedTicket.assigned_to) rawList.push(String(selectedTicket.assigned_to));
-        if (selectedTicket.original_raiser) rawList.push(String(selectedTicket.original_raiser));
-
-        rawList.forEach(val => {
-            const strVal = String(val).trim();
-            if (strVal && !['nan', 'none', '', 'unassigned'].includes(strVal.toLowerCase())) {
-                restricted.add(strVal.toLowerCase());
-                const u = usersList.find(usr => String(usr.employee_id) === strVal || String(usr.email).toLowerCase() === strVal.toLowerCase());
-                if (u) {
-                    if (u.employee_id) restricted.add(String(u.employee_id).toLowerCase());
-                    if (u.email) restricted.add(String(u.email).toLowerCase());
-                }
-            }
-        });
-        return restricted;
-    }, [tickets, selectedTicket, usersList]);
-
-    const handoverSolverOptions = useMemo(() => {
-        if (!handoverDept) return [];
-        return usersList
-            .filter(u => {
-                if (u.department !== handoverDept) return false;
-                if (['Admin', 'Superadmin', 'Super Admin', 'Viewer'].includes(u.role)) return false;
-                if (restrictedUserIdentifiers.has(String(u.employee_id).toLowerCase()) || restrictedUserIdentifiers.has(String(u.email || '').toLowerCase())) return false;
-                return true;
-            })
-            .map(u => ({ label: `${u.name} (${u.phone_number || u.phone || u.employee_id})`, value: u.employee_id }));
-    }, [usersList, handoverDept, restrictedUserIdentifiers]);
-
-    const escalateSolverOptions = useMemo(() => {
-        if (!escalateDept) return [];
-        return usersList
-            .filter(u => {
-                if (u.department !== escalateDept) return false;
-                if (['Admin', 'Superadmin', 'Super Admin', 'Viewer'].includes(u.role)) return false;
-                if (restrictedUserIdentifiers.has(String(u.employee_id).toLowerCase()) || restrictedUserIdentifiers.has(String(u.email || '').toLowerCase())) return false;
-                return true;
-            })
-            .map(u => ({ label: `${u.name} (${u.role})`, value: u.email }));
-    }, [usersList, escalateDept, restrictedUserIdentifiers]);
-
     const myTasks = tickets.filter(t => {
-        const assignedRaw = String(t.assigned_to);
-        return assignedRaw.includes(user.name) || assignedRaw.includes(String(user.employee_id)) || assignedRaw === String(user.email);
+        if (!user) return false;
+        const assignedRaw = String(t.assigned_to || '');
+        const userName = user.name ? String(user.name) : '';
+        const userEmpId = user.employee_id ? String(user.employee_id) : '';
+        const userEmail = user.email ? String(user.email) : '';
+        return (userName && assignedRaw.includes(userName)) ||
+            (userEmpId && assignedRaw.includes(userEmpId)) ||
+            (userEmail && (assignedRaw.toLowerCase() === userEmail.toLowerCase() || assignedRaw.toLowerCase().includes(userEmail.toLowerCase())));
     });
 
     const deptFilteredTasks = myTasks.filter(t => {

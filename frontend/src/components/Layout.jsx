@@ -1,7 +1,7 @@
 // frontend/src/components/Layout.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Ticket, CheckSquare, Settings, Bell, CheckCircle2, Sun, Moon, ChevronDown, ChevronRight, TrendingUp, Clock, Users, MapPin, Cog, PlusCircle, ClipboardList, Zap, CheckCircle, BarChart2, Calendar, Menu, X } from 'lucide-react';
+import { LogOut, LayoutDashboard, Ticket, CheckSquare, Settings, Bell, CheckCircle2, Sun, Moon, ChevronDown, ChevronRight, TrendingUp, Clock, Users, MapPin, Cog, PlusCircle, ClipboardList, Zap, CheckCircle, BarChart2, Calendar, Menu, X, ArrowUpRight } from 'lucide-react';
 import CalendarModal from './CalendarModal';
 
 const TABS_CONFIG = {
@@ -24,8 +24,9 @@ const TABS_CONFIG = {
         { id: 'raise', label: <><PlusCircle size={12} /> Raise New Issue</> }
     ],
     '/solver': [
-        { id: 'active', label: <><Zap size={12} /> Active Tasks</> },
-        { id: 'closed', label: <><CheckCircle size={12} /> Closed Tasks</> }
+        { id: 'active_tasks', label: <><Zap size={12} /> Active Tasks</> },
+        { id: 'escalated_tasks', label: <><ArrowUpRight size={12} /> Escalated Tasks</> },
+        { id: 'closed_tasks', label: <><CheckCircle size={12} /> Closed Tasks</> }
     ],
     '/viewer': [
         { id: 'analytics', label: <><TrendingUp size={12} /> Global Analytics</> },
