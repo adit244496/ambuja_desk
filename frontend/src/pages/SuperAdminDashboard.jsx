@@ -1445,9 +1445,9 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                     )}
                     {activeTab === 'ageing' && !loading && (
                         <div className="card flex-table-card" style={isAgeingExpanded ? { position: 'fixed', inset: '16px', zIndex: 1000, backgroundColor: 'var(--bg-main, #0f172a)', margin: 0, padding: '20px', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' } : { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, marginBottom: 0 }}>
-                            <div className="flex-row justify-between mb-4 gap-3">
+                            <div className="ageing-controls-bar flex-row justify-between mb-4 gap-3">
                                 <h3 className="m-0 text-lg" style={{ whiteSpace: 'nowrap' }}>⏳ Full Ticket Ageing Analytics</h3>
-                                <div className="flex-row justify-end gap-2 flex-1" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div className="ageing-controls-group flex-row justify-end gap-2 flex-1" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
                                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                                         <select
                                             className="form-control"
@@ -1770,10 +1770,10 @@ const SuperAdminDashboard = ({ user, setUser }) => {
 
 
                             {/* PILL NAVIGATION & CONTEXTUAL ACTIONS */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+                            <div className="master-controls-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
 
                                 {/* PILLS */}
-                                <div style={{ display: 'flex', gap: '8px' }}>
+                                <div className="master-pills-bar" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                     {['users', 'projects_dept', 'locations', 'categories', 'canned_responses', 'import'].map(tab => (
                                         <button
                                             key={tab}
@@ -1796,9 +1796,9 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                 </div>
 
                                 {/* ACTIONS */}
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <div className="master-actions-bar" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                                     {masterControlTab === 'canned_responses' && (
-                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                        <div className="master-search-bar" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <input
                                                 type="text"
                                                 className="form-control"
@@ -1842,7 +1842,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                         </div>
                                     )}
                                     {masterControlTab === 'users' && (
-                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                        <div className="master-search-bar" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <select
                                                 className="form-control"
                                                 value={userSearchConstraint}
@@ -1907,7 +1907,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                         </div>
                                     )}
                                     {masterControlTab === 'locations' && (
-                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                        <div className="master-search-bar" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <select
                                                 className="form-control"
                                                 value={locSearchConstraint}
@@ -1966,7 +1966,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                         </div>
                                     )}
                                     {masterControlTab === 'projects_dept' && (
-                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                        <div className="master-search-bar" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <select
                                                 className="form-control"
                                                 value={deptSearchConstraint}
@@ -2023,7 +2023,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                         </div>
                                     )}
                                     {masterControlTab === 'categories' && (
-                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                        <div className="master-search-bar" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <select
                                                 className="form-control"
                                                 value={catSearchConstraint}
@@ -2087,39 +2087,32 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                             {/* USERS */}
                             {masterControlTab === 'users' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
-                                    {/* STATIC HEADER OUTSIDE SCROLL CONTAINER */}
-                                    <div style={{ backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
+                                    <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                                        <table style={{ width: '100%', minWidth: '980px', borderCollapse: 'collapse', fontSize: '11px' }}>
                                             <thead>
-                                                <tr>
-                                                    <th onClick={() => handleSortClick('employee_id')} style={{ width: '12%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Emp ID">
+                                                <tr style={{ position: 'sticky', top: 0, zIndex: 5, backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
+                                                    <th onClick={() => handleSortClick('employee_id')} style={{ width: '100px', minWidth: '100px', padding: '12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Emp ID">
                                                         Emp ID {userSortField === 'employee_id' ? (userSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th onClick={() => handleSortClick('name')} style={{ width: '18%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Name">
+                                                    <th onClick={() => handleSortClick('name')} style={{ width: '170px', minWidth: '170px', padding: '12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Name">
                                                         Name {userSortField === 'name' ? (userSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th onClick={() => handleSortClick('email')} style={{ width: '18%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Email">
+                                                    <th onClick={() => handleSortClick('email')} style={{ width: '180px', minWidth: '180px', padding: '12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Email">
                                                         Email {userSortField === 'email' ? (userSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th style={{ width: '10%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold' }}>Role</th>
-                                                    <th onClick={() => handleSortClick('department')} style={{ width: '10%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Dept">
+                                                    <th style={{ width: '90px', minWidth: '90px', padding: '12px', textAlign: 'left', fontWeight: 'bold', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }}>Role</th>
+                                                    <th onClick={() => handleSortClick('department')} style={{ width: '130px', minWidth: '130px', padding: '12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Dept">
                                                         Dept {userSortField === 'department' ? (userSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th onClick={() => handleSortClick('designation')} style={{ width: '10%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Designation">
+                                                    <th onClick={() => handleSortClick('designation')} style={{ width: '130px', minWidth: '130px', padding: '12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Designation">
                                                         Designation {userSortField === 'designation' ? (userSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th onClick={() => handleSortClick('reporting_manager')} style={{ width: '12%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Reporting Manager">
+                                                    <th onClick={() => handleSortClick('reporting_manager')} style={{ width: '180px', minWidth: '180px', padding: '12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Reporting Manager">
                                                         Reporting Manager {userSortField === 'reporting_manager' ? (userSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th style={{ width: '10%', padding: '12px 12px', textAlign: 'center', fontWeight: 'bold' }}>Actions</th>
+                                                    <th style={{ width: '100px', minWidth: '100px', padding: '12px', textAlign: 'center', fontWeight: 'bold', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }}>Actions</th>
                                                 </tr>
                                             </thead>
-                                        </table>
-                                    </div>
-
-                                    {/* SCROLLABLE BODY */}
-                                    <div style={{ flex: 1, overflowY: 'auto' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
                                             <tbody>
                                                 {filteredUsers.map(u => {
                                                     const isActive = String(u.active).toUpperCase() !== 'FALSE';
@@ -2140,30 +2133,35 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                                                 transition: 'background-color 0.2s'
                                                             }}
                                                         >
-                                                            <td style={{ width: '12%', padding: '12px 12px' }}>{u.employee_id}</td>
-                                                            <td style={{ width: '18%', padding: '12px 12px', fontWeight: 'bold' }}>{u.name}
-                                                                {isActive ? (
-                                                                    <span style={{ backgroundColor: '#d1fae5', color: 'var(--text-muted)', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', marginLeft: '8px' }}>Active</span>
-                                                                ) : (
-                                                                    <span style={{ backgroundColor: '#fee2e2', color: '#ef4444', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', marginLeft: '8px' }}>Inactive</span>
-                                                                )}</td>
-                                                            <td style={{ width: '18%', padding: '12px 12px', color: 'var(--text-muted)' }}>{u.email}</td>
-                                                            <td style={{ width: '10%', padding: '12px 12px' }}>
+                                                            <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>{u.employee_id}</td>
+                                                            <td style={{ padding: '12px', fontWeight: 'bold' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                    <span>{u.name}</span>
+                                                                    {isActive ? (
+                                                                        <span style={{ backgroundColor: '#d1fae5', color: '#065f46', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 'normal', whiteSpace: 'nowrap' }}>Active</span>
+                                                                    ) : (
+                                                                        <span style={{ backgroundColor: '#fee2e2', color: '#ef4444', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 'normal', whiteSpace: 'nowrap' }}>Inactive</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ padding: '12px', color: 'var(--text-muted)', wordBreak: 'break-all' }}>{u.email}</td>
+                                                            <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>
                                                                 <span style={{
                                                                     backgroundColor: u.role === 'Admin' || u.role === 'Superadmin' || u.role === 'Super Admin' ? 'rgba(239, 68, 68, 0.1)' : u.role === 'Viewer' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(59, 130, 246, 0.1)',
                                                                     color: u.role === 'Admin' || u.role === 'Superadmin' || u.role === 'Super Admin' ? '#ef4444' : u.role === 'Viewer' ? '#a855f7' : '#3b82f6',
                                                                     padding: '4px 8px',
                                                                     borderRadius: '4px',
                                                                     fontSize: '10px',
-                                                                    fontWeight: 'bold'
+                                                                    fontWeight: 'bold',
+                                                                    display: 'inline-block'
                                                                 }}>
                                                                     {u.role}
                                                                 </span>
                                                             </td>
-                                                            <td style={{ width: '10%', padding: '12px 12px', color: 'var(--text-muted)' }}>{u.department}</td>
-                                                            <td style={{ width: '10%', padding: '12px 12px', color: 'var(--text-muted)' }}>{u.designation || '-'}</td>
-                                                            <td style={{ width: '12%', padding: '12px 12px', color: 'var(--text-muted)' }}>{getSolverDetails(u.reporting_manager)}</td>
-                                                            <td style={{ width: '10%', padding: '12px 12px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                                                            <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{u.department}</td>
+                                                            <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{u.designation || '-'}</td>
+                                                            <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{getSolverDetails(u.reporting_manager)}</td>
+                                                            <td style={{ padding: '12px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                                                     <button
                                                                         type="button"
@@ -2225,20 +2223,13 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                             {/* PROJECTS */}
                             {masterControlTab === 'projects' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
-                                    {/* STATIC HEADER OUTSIDE SCROLL CONTAINER */}
-                                    <div style={{ backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
+                                    <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                                        <table style={{ width: '100%', minWidth: '350px', borderCollapse: 'collapse', fontSize: '11px' }}>
                                             <thead>
-                                                <tr>
-                                                    <th style={{ width: '100%', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold' }}>Project Name</th>
+                                                <tr style={{ position: 'sticky', top: 0, zIndex: 5, backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
+                                                    <th style={{ width: '100%', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', backgroundColor: 'var(--bg-main)' }}>Project Name</th>
                                                 </tr>
                                             </thead>
-                                        </table>
-                                    </div>
-
-                                    {/* SCROLLABLE BODY */}
-                                    <div style={{ flex: 1, overflowY: 'auto' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
                                             <tbody>
                                                 {projectsList.filter(p => (p.project_name || '').toLowerCase().includes(locSearchQuery.toLowerCase())).map((proj, idx) => (
                                                     <tr key={idx} onClick={() => {
@@ -2257,37 +2248,30 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                             {/* LOCATIONS */}
                             {masterControlTab === 'locations' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
-                                    {/* STATIC HEADER OUTSIDE SCROLL CONTAINER */}
-                                    <div style={{ backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
+                                    <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                                        <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', fontSize: '11px' }}>
                                             <thead>
-                                                <tr>
-                                                    <th onClick={() => handleLocSortClick('project')} style={{ width: '30%', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Project">
+                                                <tr style={{ position: 'sticky', top: 0, zIndex: 5, backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
+                                                    <th onClick={() => handleLocSortClick('project')} style={{ width: '30%', minWidth: '160px', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Project">
                                                         Project {locSortField === 'project' ? (locSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th onClick={() => handleLocSortClick('tower')} style={{ width: '30%', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Tower">
+                                                    <th onClick={() => handleLocSortClick('tower')} style={{ width: '30%', minWidth: '160px', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Tower">
                                                         Tower {locSortField === 'tower' ? (locSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th onClick={() => handleLocSortClick('location')} style={{ width: '40%', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Location">
+                                                    <th onClick={() => handleLocSortClick('location')} style={{ width: '40%', minWidth: '220px', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Location">
                                                         Location {locSortField === 'location' ? (locSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
                                                 </tr>
                                             </thead>
-                                        </table>
-                                    </div>
-
-                                    {/* SCROLLABLE BODY */}
-                                    <div style={{ flex: 1, overflowY: 'auto' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
                                             <tbody>
                                                 {filteredLocations.map(loc => (
                                                     <tr key={loc.location} onClick={() => {
                                                         if (selectedMasterLocations.includes(loc.location)) setSelectedMasterLocations(selectedMasterLocations.filter(l => l !== loc.location));
                                                         else setSelectedMasterLocations([...selectedMasterLocations, loc.location]);
                                                     }} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', backgroundColor: selectedMasterLocations.includes(loc.location) ? 'rgba(59, 130, 246, 0.1)' : 'transparent' }} >
-                                                        <td style={{ width: '30%', padding: '12px 16px', fontWeight: '600', color: 'var(--text-muted)', fontSize: '11px' }}>{loc.project}</td>
-                                                        <td style={{ width: '30%', padding: '12px 16px' }}>{loc.tower}</td>
-                                                        <td style={{ width: '40%', padding: '12px 16px', color: 'var(--text-muted)' }}>{loc.location}</td>
+                                                        <td style={{ padding: '12px 16px', fontWeight: '600', color: 'var(--text-muted)', fontSize: '11px' }}>{loc.project}</td>
+                                                        <td style={{ padding: '12px 16px' }}>{loc.tower}</td>
+                                                        <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>{loc.location}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -2301,7 +2285,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
 
                             {/* PROJECTS & DEPARTMENTS */}
                             {masterControlTab === 'projects_dept' && (
-                                <div style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
+                                <div className="master-split-grid" style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
                                     {/* PROJECTS */}
                                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-main)', fontWeight: '600', color: 'var(--text-muted)', fontSize: '11px' }}>
@@ -2389,7 +2373,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
 
                             {/* CATEGORIES */}
                             {masterControlTab === 'categories' && (
-                                <div style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
+                                <div className="master-split-grid" style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
                                     {/* ISSUE CATEGORIES */}
                                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-main)', fontWeight: '600', color: 'var(--text-muted)', fontSize: '11px' }}>
@@ -2483,26 +2467,26 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                     </div>
 
                                     <div className="card" style={{ padding: '0', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                                        <div className="table-responsive" style={{ maxHeight: '550px', overflowY: 'auto' }}>
-                                            <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                                        <div className="table-responsive" style={{ maxHeight: '550px', overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                                            <table className="data-table" style={{ width: '100%', minWidth: '850px', borderCollapse: 'collapse', fontSize: '11px' }}>
                                                 <thead>
-                                                    <tr style={{ backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
-                                                        <th onClick={() => handleCannedSortClick('id')} style={{ padding: '10px 12px', textAlign: 'center', width: '50px', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by ID">
+                                                    <tr style={{ position: 'sticky', top: 0, zIndex: 5, backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
+                                                        <th onClick={() => handleCannedSortClick('id')} style={{ padding: '10px 12px', textAlign: 'center', width: '60px', minWidth: '60px', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by ID">
                                                             ID {cannedSortField === 'id' ? (cannedSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                         </th>
-                                                        <th onClick={() => handleCannedSortClick('label')} style={{ padding: '10px 12px', textAlign: 'left', width: '220px', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Title">
+                                                        <th onClick={() => handleCannedSortClick('label')} style={{ padding: '10px 12px', textAlign: 'left', width: '200px', minWidth: '200px', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Title">
                                                             Template Title / Label {cannedSortField === 'label' ? (cannedSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                         </th>
-                                                        <th onClick={() => handleCannedSortClick('text')} style={{ padding: '10px 12px', textAlign: 'left', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Content">
+                                                        <th onClick={() => handleCannedSortClick('text')} style={{ padding: '10px 12px', textAlign: 'left', minWidth: '250px', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Content">
                                                             Response Content Text {cannedSortField === 'text' ? (cannedSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                         </th>
-                                                        <th onClick={() => handleCannedSortClick('created_by')} style={{ padding: '10px 12px', textAlign: 'left', width: '180px', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Owner">
+                                                        <th onClick={() => handleCannedSortClick('created_by')} style={{ padding: '10px 12px', textAlign: 'left', width: '160px', minWidth: '160px', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Owner">
                                                             Created By / Owner {cannedSortField === 'created_by' ? (cannedSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                         </th>
-                                                        <th onClick={() => handleCannedSortClick('is_custom')} style={{ padding: '10px 12px', textAlign: 'center', width: '120px', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Scope">
+                                                        <th onClick={() => handleCannedSortClick('is_custom')} style={{ padding: '10px 12px', textAlign: 'center', width: '120px', minWidth: '120px', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Scope">
                                                             Scope / Type {cannedSortField === 'is_custom' ? (cannedSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                         </th>
-                                                        <th style={{ padding: '10px 12px', textAlign: 'center', width: '100px' }}>Actions</th>
+                                                        <th style={{ padding: '10px 12px', textAlign: 'center', width: '100px', minWidth: '100px', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }}>Actions</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -2626,7 +2610,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                     </div>
 
                                     {/* Import Tabs Sub-Navigation */}
-                                    <div style={{ display: 'flex', gap: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+                                    <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '12px', flexWrap: 'wrap' }}>
                                         {['users', 'locations', 'departments', 'issue_categories', 'activity_categories'].map(tab => (
                                             <button key={tab} className={`btn ${activeImportTab === tab ? 'force-white-text' : ''}`} style={{ backgroundColor: activeImportTab === tab ? '#3b82f6' : 'transparent', border: activeImportTab === tab ? 'none' : '1px solid #cbd5e1', fontSize: '11px', padding: '6px 16px', color: activeImportTab === tab ? '#fff' : '#475569' }} onClick={() => { setActiveImportTab(tab); setImportError(''); setImportSuccess(''); setImportFile(null); setImportValidationErrors([]); }}>
                                                 {tab.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
@@ -2635,7 +2619,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                     </div>
 
                                     <div className="card" style={{ maxWidth: '800px', padding: '24px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
                                             <div>
                                                 <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', textTransform: 'capitalize' }}>Import {activeImportTab.replace('_', ' ')}</h4>
                                                 <p style={{ margin: 0, fontSize: '10px', color: '#71717a' }}>Ensure your Excel file follows the exact template structure.</p>
@@ -3185,7 +3169,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                 />
             )}
             {selectedTicket && (
-                <div style={{
+                <div className="ticket-details-panel slide-in-right-panel" style={{
                     position: 'fixed',
                     top: isSidePanelExpanded ? '2vh' : '52px',
                     bottom: isSidePanelExpanded ? '2vh' : '0',
@@ -3202,8 +3186,8 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                     transition: 'top 0.9s cubic-bezier(0.4, 0, 0.2, 1), right 0.9s cubic-bezier(0.4, 0, 0.2, 1), width 0.9s cubic-bezier(0.4, 0, 0.2, 1), bottom 0.9s cubic-bezier(0.4, 0, 0.2, 1), border-radius 0.9s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.9s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}>
                     <div style={{ padding: '24px 24px 0 24px', zIndex: 10, borderBottom: '1px solid var(--border, #cbd5e1)', background: 'transparent' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div className="side-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <div className="side-panel-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <h3 style={{ margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     #{selectedTicket.ticket_id}
                                     <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 'bold' }}>{selectedTicket.status}</span>
@@ -3305,7 +3289,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
 
                         {activeDetailsTab === 'details' && (
                             <div style={{ paddingBottom: '20px' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: isSidePanelExpanded ? 'repeat(4, 1fr)' : '1fr 1fr', gap: '14px', fontSize: '13px', color: '#71717a', marginBottom: '16px' }}>
+                                <div className="ticket-info-grid" style={{ display: 'grid', gridTemplateColumns: isSidePanelExpanded ? 'repeat(4, 1fr)' : '1fr 1fr', gap: '14px', fontSize: '13px', color: '#71717a', marginBottom: '16px' }}>
                                     <div><strong style={{ color: 'var(--text-main)' }}>Raised On:</strong> <span style={{ color: '#a1a1aa' }}>{selectedTicket.timestamp?.split(' ')[0]}</span></div>
                                     {selectedTicket.deadline ? <div><strong style={{ color: 'var(--text-main)' }}>Deadline:</strong> <span style={{ color: 'var(--text-muted)' }}>{selectedTicket.deadline?.split(' ')[0]}</span></div> : <div></div>}
                                     <div><strong style={{ color: 'var(--text-main)' }}>Current Raiser:</strong> <span style={{ color: 'var(--text-muted)' }}>{selectedTicket.raiser_name || selectedTicket.raised_by}</span></div>
@@ -3320,7 +3304,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                     {selectedTicket.solved_timestamp && String(selectedTicket.solved_timestamp).toLowerCase() !== 'nan' && selectedTicket.status !== 'Closed' && <div><strong style={{ color: 'var(--text-main)' }}>Resolved On:</strong> <span style={{ color: 'var(--text-muted)' }}>{selectedTicket.solved_timestamp?.split(' ')[0]}</span></div>}
                                     {selectedTicket.closed_timestamp && String(selectedTicket.closed_timestamp).toLowerCase() !== 'nan' && selectedTicket.status === 'Closed' && <div><strong style={{ color: 'var(--text-main)' }}>Closed On:</strong> <span style={{ color: 'var(--text-muted)' }}>{selectedTicket.closed_timestamp?.split(' ')[0]}</span></div>}
                                 </div>
-                                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '20px', position: 'relative', zIndex: 10 }}>
+                                <div className="ticket-desc-attachment-row" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '20px', position: 'relative', zIndex: 10 }}>
                                     <div className="detail-box" style={{ flex: 1, minWidth: 0, fontSize: '13px', padding: '14px', borderRadius: '6px', lineHeight: '1.6', backgroundColor: 'var(--bg-main)', height: selectedTicket.attachment && String(selectedTicket.attachment).toLowerCase() !== 'nan' ? '142px' : 'auto', maxHeight: '142px', overflowY: 'auto' }}>
                                         <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '8px', fontSize: '13px' }}>Issue Description:</strong>
                                         <span style={{ color: '#a1a1aa', whiteSpace: 'pre-wrap', display: 'block', wordBreak: 'break-word' }}>

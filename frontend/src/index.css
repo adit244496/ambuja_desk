@@ -1422,140 +1422,7 @@ body.light-mode .adv-search-filters select option {
   animation: shine 0.6s ease-in-out;
 }
 
-/* --- MOBILE RESPONSIVENESS (NO NEW SCROLLING) --- */
-@media (max-width: 768px) {
-  html {
-    zoom: 1 !important;
-    height: 100vh !important;
-    width: 100vw !important;
-    overflow-x: hidden !important;
-  }
-
-  body,
-  #root,
-  .app-layout {
-    height: 100vh !important;
-    width: 100vw !important;
-    min-height: 100vh !important;
-    max-height: 100vh !important;
-    overflow-x: hidden !important;
-  }
-
-  /* Sidebar */
-  .sidebar {
-    transform: translateX(-100%);
-    position: fixed !important;
-    z-index: 1050 !important;
-    width: 250px !important;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .sidebar.open {
-    transform: translateX(0);
-    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
-  }
-
-  /* Main Layout */
-  .main-content {
-    margin-left: 0 !important;
-    width: 100vw !important;
-  }
-
-  .content-wrapper {
-    padding-right: 0 !important;
-    /* Prevent side panel push on mobile */
-  }
-
-  /* Header */
-  .app-header {
-    padding: 0 10px !important;
-  }
-
-  .app-header h1 {
-    font-size: 16px !important;
-    white-space: normal !important;
-  }
-
-  .header-actions {
-    gap: 8px !important;
-  }
-
-  /* Dashboard KPI Grid System */
-  .kpi-grid {
-    display: grid !important;
-    grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)) !important;
-    gap: 12px !important;
-    margin-bottom: 24px !important;
-    padding: 2px !important;
-    width: 100% !important;
-  }
-
-  .kpi-card {
-    padding: 12px 10px !important;
-    margin: 0 !important;
-    text-align: center !important;
-    border-radius: 10px !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
-    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    align-items: center !important;
-    min-height: 72px !important;
-    position: relative !important;
-  }
-
-  .kpi-card:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12) !important;
-  }
-
-  .kpi-card p {
-    font-size: 10px !important;
-    text-transform: uppercase !important;
-    font-weight: 700 !important;
-    margin: 0 0 4px 0 !important;
-    letter-spacing: 0.04em !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    max-width: 100% !important;
-  }
-
-  .kpi-card h2 {
-    font-size: 20px !important;
-    margin: 0 !important;
-    font-weight: 800 !important;
-    line-height: 1 !important;
-  }
-
-  /* Table Container */
-  .table-responsive {
-    overflow-x: auto !important;
-    max-width: 100vw;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .data-table {
-    min-width: 800px;
-    /* Force table to keep its layout and allow scroll */
-  }
-
-  /* Right Side Panel (Ticket Details) */
-  .slide-in-right-panel,
-  .slide-out-right-panel {
-    width: 100vw !important;
-    right: 0 !important;
-    z-index: 1100 !important;
-    max-width: none !important;
-    border-radius: 0 !important;
-    top: 0 !important;
-    height: 100vh !important;
-    box-shadow: none !important;
-  }
-}
-
-
+/* --- GLOBAL BASE STYLES & KPI STAT TILES GRID DESIGN SYSTEM --- */
 .force-white-text,
 .force-white-text *,
 body.light-mode .force-white-text,
@@ -1566,7 +1433,6 @@ body.light-mode button.btn.force-white-text * {
   stroke: #ffffff !important;
 }
 
-/* --- GLOBAL KPI STAT TILES GRID DESIGN SYSTEM --- */
 .kpi-grid {
   display: grid !important;
   grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)) !important;
@@ -1628,4 +1494,384 @@ body.light-mode button.btn.force-white-text * {
 .card.flex-table-card>div:last-child {
   flex: 1 1 0% !important;
   min-height: 0 !important;
+}
+
+.header-date-desktop {
+  display: inline;
+}
+
+.header-date-mobile {
+  display: none;
+}
+
+/* --- MOBILE RESPONSIVENESS (< 768px) --- */
+@media (max-width: 768px) {
+
+  /* 1. Viewport & Dimensions Reset */
+  html,
+  body,
+  #root,
+  .app-layout {
+    zoom: 1 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    min-height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 2. Sidebar Navigation (Strictly fixed drawer on screen, touch scrolling for links, pinned logout) */
+  aside,
+  .sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 260px !important;
+    max-width: 85vw !important;
+    height: 100% !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    transform: translateX(-100%) !important;
+    z-index: 1100 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+
+  .sidebar.open {
+    transform: translateX(0) !important;
+    box-shadow: 4px 0 35px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  .mobile-sidebar-backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: 1090 !important;
+  }
+
+  /* 3. Main Content & Layout Wrapper */
+  .main-content,
+  .dashboard-wrapper,
+  .content-wrapper {
+    margin-left: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    padding-right: 0 !important;
+  }
+
+  .app-main-content {
+    padding: 12px 10px 8px 10px !important;
+  }
+
+  /* 4. Header Navigation & Tagline */
+  .app-header {
+    padding: 0 8px !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100vw !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    overflow: visible !important;
+    z-index: 1000 !important;
+  }
+
+  .header-greeting-text {
+    font-size: 11.5px !important;
+    max-width: 155px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    line-height: 1.2 !important;
+  }
+
+  .greeting-prefix {
+    display: inline !important;
+  }
+
+  .header-date-time {
+    display: flex !important;
+    align-items: center !important;
+    font-size: 9px !important;
+    color: var(--text-muted, #94a3b8) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    line-height: 1.2 !important;
+    margin-top: 1px !important;
+  }
+
+  .header-date-desktop {
+    display: none !important;
+  }
+
+  .header-date-mobile {
+    display: inline !important;
+    font-size: 9px !important;
+  }
+
+  .header-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    flex-shrink: 0 !important;
+    overflow: visible !important;
+  }
+
+  .header-action-btn {
+    margin-right: 0 !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    padding: 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    touch-action: manipulation !important;
+    flex-shrink: 0 !important;
+  }
+
+  .header-notif-wrapper {
+    flex-shrink: 0 !important;
+    position: relative !important;
+    overflow: visible !important;
+    z-index: 1200 !important;
+  }
+
+  .header-notif-btn {
+    margin-right: 0 !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    padding: 6px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    touch-action: manipulation !important;
+    user-select: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    flex-shrink: 0 !important;
+  }
+
+  .header-logo-container {
+    margin-right: 4px !important;
+  }
+
+  .header-logo-container img {
+    height: 19px !important;
+    max-width: 70px !important;
+  }
+
+  .header-tagline {
+    display: none !important;
+  }
+
+  /* 5. Mobile KPI Grid with Cascade Precedence */
+  .kpi-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)) !important;
+    gap: 8px !important;
+    margin-bottom: 16px !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  .kpi-card {
+    padding: 10px 6px !important;
+    margin: 0 !important;
+    text-align: center !important;
+    border-radius: 8px !important;
+    min-height: 64px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
+
+  .kpi-card p {
+    font-size: 9.5px !important;
+    text-transform: uppercase !important;
+    font-weight: 700 !important;
+    margin: 0 0 3px 0 !important;
+    letter-spacing: 0.02em !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
+  }
+
+  .kpi-card h2 {
+    font-size: 18px !important;
+    margin: 0 !important;
+    font-weight: 800 !important;
+    line-height: 1.1 !important;
+  }
+
+  /* 6. Ticket Details Side Panel (100vw Fullscreen on Mobile) */
+  .slide-in-right-panel,
+  .slide-out-right-panel,
+  .ticket-details-panel {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 52px !important;
+    bottom: 0 !important;
+    height: calc(100% - 52px) !important;
+    border-radius: 0 !important;
+    border-left: none !important;
+    box-shadow: none !important;
+    z-index: 1100 !important;
+  }
+
+  .side-panel-header {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .side-panel-header-actions {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .ticket-info-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .ticket-info-grid>div {
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+    font-size: 12px !important;
+  }
+
+  .ticket-desc-attachment-row {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  .ticket-desc-attachment-row>div {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .ticket-update-form-row {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  .ticket-update-form-row>div {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+
+  .ticket-action-bar-mobile {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  /* 7. Reports & Analytics Responsiveness */
+  .analytics-filter-bar {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .analytics-filter-inputs {
+    flex-wrap: wrap !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+
+  .analytics-filter-inputs>div {
+    width: 100% !important;
+    flex: 1 1 calc(50% - 6px) !important;
+    min-width: 130px !important;
+  }
+
+  .analytics-charts-row {
+    flex-direction: column !important;
+    min-height: auto !important;
+    overflow-x: visible !important;
+  }
+
+  .analytics-charts-row>div {
+    width: 100% !important;
+    min-width: 100% !important;
+    min-height: 280px !important;
+  }
+
+  .ageing-controls-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .ageing-controls-group {
+    flex-wrap: wrap !important;
+    width: 100% !important;
+    justify-content: flex-start !important;
+    gap: 6px !important;
+  }
+
+  /* 8. Data Tables & Smooth Touch Scrolling */
+  .table-responsive,
+  .data-table-container,
+  div[style*="overflowX: auto"],
+  div[style*="overflow-x: auto"],
+  div[style*="overflow: auto"] {
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .data-table {
+    min-width: 720px;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* 9. Master Controls Responsiveness */
+  .master-split-grid {
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+
+  .master-controls-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .master-pills-bar {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .master-actions-bar {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .master-search-bar {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    width: 100% !important;
+  }
+
+  .master-search-bar input,
+  .master-search-bar select {
+    flex: 1 1 calc(50% - 6px) !important;
+    min-width: 120px !important;
+    max-width: 100% !important;
+  }
 }

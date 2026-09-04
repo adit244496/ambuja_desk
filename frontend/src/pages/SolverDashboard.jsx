@@ -1112,7 +1112,7 @@ const SolverDashboard = ({ user, setUser }) => {
             {panelTicket && (() => {
                 const selectedTicket = panelTicket;
                 return (
-                    <div className={isClosing ? "slide-out-right-panel" : "slide-in-right-panel"} style={{
+                    <div className={isClosing ? "slide-out-right-panel ticket-details-panel" : "slide-in-right-panel ticket-details-panel"} style={{
                         position: 'fixed',
                         top: isSidePanelExpanded ? '2vh' : '52px',
                         bottom: isSidePanelExpanded ? '2vh' : '0',
@@ -1129,7 +1129,7 @@ const SolverDashboard = ({ user, setUser }) => {
                         transition: 'top 0.9s cubic-bezier(0.4, 0, 0.2, 1), right 0.9s cubic-bezier(0.4, 0, 0.2, 1), width 0.9s cubic-bezier(0.4, 0, 0.2, 1), bottom 0.9s cubic-bezier(0.4, 0, 0.2, 1), border-radius 0.9s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.9s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}>
                         <div style={{ padding: '24px 30px 0 30px', zIndex: 10, backgroundColor: 'var(--bg-card)', borderRadius: isSidePanelExpanded ? '12px 12px 0 0' : 0 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <div className="side-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                 <h3 style={{ margin: 0, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     #{selectedTicket.ticket_id}
                                     <span style={{ backgroundColor: selectedTicket.status === 'Closed' ? '#e4e4e7' : selectedTicket.status === 'Resolved' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)', color: selectedTicket.status === 'Closed' ? '#71717a' : selectedTicket.status === 'Resolved' ? '#10b981' : '#3b82f6', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{selectedTicket.status}</span>
@@ -1137,7 +1137,7 @@ const SolverDashboard = ({ user, setUser }) => {
                                         <span style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', padding: '4px 10px', borderRadius: '12px', fontSize: '10.5px', fontWeight: 'bold', border: '1px solid rgba(245, 158, 11, 0.3)' }}>Handover Pending Approval</span>
                                     )}
                                 </h3>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div className="side-panel-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -1293,7 +1293,7 @@ const SolverDashboard = ({ user, setUser }) => {
 
                             {activeDetailsTab === 'details' && (
                                 <div style={{ paddingBottom: '40px' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: isSidePanelExpanded ? 'repeat(4, 1fr)' : '1fr 1fr', gap: '14px', fontSize: '12px', color: '#71717a', marginBottom: '16px' }}>
+                                    <div className="ticket-info-grid" style={{ display: 'grid', gridTemplateColumns: isSidePanelExpanded ? 'repeat(4, 1fr)' : '1fr 1fr', gap: '14px', fontSize: '12px', color: '#71717a', marginBottom: '16px' }}>
                                         <div><strong style={{ color: 'var(--text-main)' }}>Raised On:</strong> <span style={{ color: '#a1a1aa' }}>{selectedTicket.timestamp?.split(' ')[0]}</span></div>
                                         {selectedTicket.deadline ? <div><strong style={{ color: 'var(--text-main)' }}>Deadline:</strong> <span style={{ color: '#10b981' }}>{selectedTicket.deadline?.split(' ')[0]}</span></div> : <div></div>}
                                         <div><strong style={{ color: 'var(--text-main)' }}>Current Raiser:</strong> <span style={{ color: '#3b82f6' }}>{selectedTicket.raiser_name || selectedTicket.raised_by}</span></div>
@@ -1308,7 +1308,7 @@ const SolverDashboard = ({ user, setUser }) => {
                                         {selectedTicket.solved_timestamp && String(selectedTicket.solved_timestamp).toLowerCase() !== 'nan' && selectedTicket.status !== 'Closed' && <div><strong style={{ color: 'var(--text-main)' }}>Resolved On:</strong> <span style={{ color: '#3b82f6' }}>{selectedTicket.solved_timestamp?.split(' ')[0]}</span></div>}
                                         {selectedTicket.closed_timestamp && String(selectedTicket.closed_timestamp).toLowerCase() !== 'nan' && selectedTicket.status === 'Closed' && <div><strong style={{ color: 'var(--text-main)' }}>Closed On:</strong> <span style={{ color: '#10b981' }}>{selectedTicket.closed_timestamp?.split(' ')[0]}</span></div>}
                                     </div>
-                                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '20px', position: 'relative', zIndex: 10 }}>
+                                    <div className="ticket-desc-attachment-row" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '20px', position: 'relative', zIndex: 10 }}>
                                         <div className="detail-box" style={{ flex: 1, minWidth: 0, fontSize: '12px', padding: '14px', borderRadius: '6px', lineHeight: '1.6', backgroundColor: 'var(--bg-main)', height: selectedTicket.attachment && String(selectedTicket.attachment).toLowerCase() !== 'nan' ? '142px' : 'auto', maxHeight: '142px', overflowY: 'auto' }}>
                                             <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '8px', fontSize: '13px' }}>Issue Description:</strong>
                                             <span style={{ color: '#a1a1aa', whiteSpace: 'pre-wrap', display: 'block', wordBreak: 'break-word' }}>
@@ -1379,7 +1379,7 @@ const SolverDashboard = ({ user, setUser }) => {
                                     ) : selectedTicket.status !== 'Closed' && selectedTicket.status !== 'Resolved' && selectedTicket.status !== 'Escalated' && selectedTicket.status !== 'Escalation Resolved' && selectedTicket.status !== 'Declined' && selectedTicket.status !== 'On Hold' && (
                                         <div className="card" style={{ padding: '16px', backgroundColor: '#18181b', border: '1px solid #27272a', position: 'relative', zIndex: 10 }}>
                                             <form onSubmit={(e) => handleStatusUpdate(e, selectedTicket.ticket_id, selectedTicket.status, selectedTicket.solver_comments)}>
-                                                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '16px' }}>
+                                                <div className="ticket-update-form-row" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '16px' }}>
                                                     <div style={{ flex: '0 0 160px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                                         <div>
                                                             <label style={{ fontSize: '10px', color: '#a1a1aa', marginBottom: '4px', display: 'block' }}>Status</label>

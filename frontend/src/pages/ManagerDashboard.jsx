@@ -227,7 +227,7 @@ const ManagerDashboard = ({ user, setUser }) => {
     // Filter team members who report to this user
     const subordinateUsers = useMemo(() => {
         if (!user || !usersList || usersList.length === 0) return [];
-        return usersList.filter(u => 
+        return usersList.filter(u =>
             u.reporting_manager && (String(u.reporting_manager) === String(user.employee_id) || String(u.reporting_manager) === String(user.email))
         );
     }, [usersList, user]);
@@ -255,7 +255,7 @@ const ManagerDashboard = ({ user, setUser }) => {
     const filteredAgeing = useMemo(() => {
         if (!searchQuery.trim()) return teamAgeingData;
         const q = searchQuery.toLowerCase();
-        return teamAgeingData.filter(t => 
+        return teamAgeingData.filter(t =>
             String(t.ticket_id).toLowerCase().includes(q) ||
             String(t.dept_assigned || '').toLowerCase().includes(q) ||
             String(t.issue_category || '').toLowerCase().includes(q) ||
@@ -421,9 +421,9 @@ const ManagerDashboard = ({ user, setUser }) => {
     };
 
     return (
-        <Layout user={user} setUser={setUser} sidebarTabs={[]} activeTab={''} setActiveTab={() => {}}>
+        <Layout user={user} setUser={setUser} sidebarTabs={[]} activeTab={''} setActiveTab={() => { }}>
             <div className="content-wrapper" style={{ paddingRight: selectedTicket && window.innerWidth > 768 ? '450px' : '0', transition: 'padding-right 0.9s', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                
+
                 {/* HEADER */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '10px' }}>
                     <div>
@@ -443,14 +443,14 @@ const ManagerDashboard = ({ user, setUser }) => {
                             onChange={(e) => setSearchQuery(e.target.value)}
                             style={{ padding: '6px 12px', fontSize: '11px', width: '220px', margin: 0 }}
                         />
-                        <button 
-                            className="btn p-2 text-xs flex-row gap-1" 
-                            onClick={() => setShowKPIs(prev => !prev)} 
+                        <button
+                            className="btn p-2 text-xs flex-row gap-1"
+                            onClick={() => setShowKPIs(prev => !prev)}
                             title={showKPIs ? "Hide KPI Cards" : "Show KPI Cards"}
-                            style={{ 
-                                whiteSpace: 'nowrap', 
-                                borderRadius: '6px', 
-                                backgroundColor: 'var(--bg-card, #131b2e)', 
+                            style={{
+                                whiteSpace: 'nowrap',
+                                borderRadius: '6px',
+                                backgroundColor: 'var(--bg-card, #131b2e)',
                                 border: '1px solid var(--border, #1e293b)',
                                 color: 'var(--text-main, #f1f5f9)',
                                 fontSize: '11px',
@@ -633,7 +633,7 @@ const ManagerDashboard = ({ user, setUser }) => {
             {panelTicket && (() => {
                 const selectedTicket = panelTicket;
                 return (
-                    <div className={isClosing ? "slide-out-right-panel" : "slide-in-right-panel"} style={{
+                    <div className={isClosing ? "slide-out-right-panel ticket-details-panel" : "slide-in-right-panel ticket-details-panel"} style={{
                         position: 'fixed',
                         top: isSidePanelExpanded ? '2vh' : '52px',
                         bottom: isSidePanelExpanded ? '2vh' : '0',
@@ -650,12 +650,12 @@ const ManagerDashboard = ({ user, setUser }) => {
                         transition: 'top 0.9s cubic-bezier(0.4, 0, 0.2, 1), right 0.9s cubic-bezier(0.4, 0, 0.2, 1), width 0.9s cubic-bezier(0.4, 0, 0.2, 1), bottom 0.9s cubic-bezier(0.4, 0, 0.2, 1), border-radius 0.9s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.9s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}>
                         <div style={{ padding: '24px 30px 0 30px', zIndex: 10, backgroundColor: 'var(--bg-card)', borderRadius: isSidePanelExpanded ? '12px 12px 0 0' : 0 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <div className="side-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                 <h3 style={{ margin: 0, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     #{selectedTicket.ticket_id}
                                     <span style={{ backgroundColor: selectedTicket.status === 'Closed' ? '#e4e4e7' : selectedTicket.status === 'Resolved' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)', color: selectedTicket.status === 'Closed' ? '#71717a' : selectedTicket.status === 'Resolved' ? '#10b981' : '#3b82f6', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>{selectedTicket.status}</span>
                                 </h3>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div className="side-panel-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <button onClick={() => setIsSidePanelExpanded(!isSidePanelExpanded)} style={{ background: 'none', border: 'none', color: 'var(--text-main, #0f172a)', fontSize: '16px', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={isSidePanelExpanded ? "Collapse" : "Expand"}>
                                         {isSidePanelExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                                     </button>
@@ -672,7 +672,7 @@ const ManagerDashboard = ({ user, setUser }) => {
                         <div style={{ flex: 1, overflowY: 'auto', padding: '24px', zIndex: 10, display: 'flex', flexDirection: 'column', background: 'transparent' }}>
                             {activeDetailsTab === 'details' && (
                                 <div style={{ paddingBottom: '20px' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: isSidePanelExpanded ? 'repeat(4, 1fr)' : '1fr 1fr', gap: '14px', fontSize: '13px', color: '#71717a', marginBottom: '16px' }}>
+                                    <div className="ticket-info-grid" style={{ display: 'grid', gridTemplateColumns: isSidePanelExpanded ? 'repeat(4, 1fr)' : '1fr 1fr', gap: '14px', fontSize: '13px', color: '#71717a', marginBottom: '16px' }}>
                                         <div><strong style={{ color: 'var(--text-main)' }}>Raised On:</strong> <span style={{ color: '#a1a1aa' }}>{(selectedTicket.timestamp || selectedTicket.created_at || selectedTicket.deadline)?.split(' ')[0]}</span></div>
                                         {selectedTicket.deadline ? <div><strong style={{ color: 'var(--text-main)' }}>Deadline:</strong> <span style={{ color: 'var(--text-muted)' }}>{selectedTicket.deadline?.split(' ')[0]}</span></div> : <div></div>}
                                         <div><strong style={{ color: 'var(--text-main)' }}>Current Raiser:</strong> <span style={{ color: 'var(--text-muted)' }}>{getRaiserName(selectedTicket)}</span></div>
@@ -688,7 +688,7 @@ const ManagerDashboard = ({ user, setUser }) => {
                                         {selectedTicket.closed_timestamp && String(selectedTicket.closed_timestamp).toLowerCase() !== 'nan' && selectedTicket.status === 'Closed' && <div><strong style={{ color: 'var(--text-main)' }}>Closed On:</strong> <span style={{ color: 'var(--text-muted)' }}>{selectedTicket.closed_timestamp?.split(' ')[0]}</span></div>}
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '20px', position: 'relative', zIndex: 10 }}>
+                                    <div className="ticket-desc-attachment-row" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '20px', position: 'relative', zIndex: 10 }}>
                                         <div className="detail-box" style={{ flex: 1, minWidth: 0, fontSize: '13px', padding: '14px', borderRadius: '6px', lineHeight: '1.6', backgroundColor: 'var(--bg-main)', height: selectedTicket.attachment && String(selectedTicket.attachment).toLowerCase() !== 'nan' ? '142px' : 'auto', maxHeight: '142px', overflowY: 'auto' }}>
                                             <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '8px', fontSize: '13px' }}>Issue Description:</strong>
                                             <ExpandableDescription text={selectedTicket.description} />

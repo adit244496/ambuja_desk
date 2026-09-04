@@ -179,7 +179,11 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
             }
         };
         document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
+        document.addEventListener("touchstart", handleClickOutside, { passive: true });
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+            document.removeEventListener("touchstart", handleClickOutside);
+        };
     }, []);
 
     // Close mobile menu when route changes
@@ -280,6 +284,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
 
     const dateOptions = { timeZone: 'Asia/Kolkata', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     const dateString = currentTime.toLocaleDateString('en-IN', dateOptions);
+    const shortDateString = currentTime.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
     const timeString = currentTime.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true });
 
     return (
@@ -408,7 +413,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                 width: '200px', backgroundColor: sb.bg, borderRight: `1px solid ${sb.border}`,
                 backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 400' preserveAspectRatio='xMidYMax slice'%3E%3Cpath fill='rgba(255,255,255,0.04)' d='M10,400V250h20v-30h30v-40h20v70h30v-80h25v50h30v-20h35v200H10z'/%3E%3Cpath fill='rgba(255,255,255,0.06)' d='M0,400V280h25v-50h20v-20h35v70h15v-40h45v30h30v-10h30v190H0z'/%3E%3Cpath fill='rgba(255,255,255,0.08)' d='M0,400V310h30v-40h25v20h20v-60h30v80h25v-30h40v-20h30v150H0z'/%3E%3C/svg%3E")`,
                 backgroundPosition: 'bottom center', backgroundRepeat: 'no-repeat', backgroundSize: 'cover',
-                position: 'fixed', top: 0, bottom: 0, height: '100%', display: 'flex', flexDirection: 'column', zIndex: 10, transition: 'background-color 0.3s, border-color 0.3s',
+                position: 'fixed', top: 0, bottom: 0, height: '100%', maxHeight: '100dvh', display: 'flex', flexDirection: 'column', zIndex: 1100, transition: 'background-color 0.3s, border-color 0.3s',
                 overflow: 'hidden' // Ensure the sun/moon don't peek outside when they drop down
             }}>
                 {/* CELESTIAL ANIMATION & GLOW */}
@@ -522,7 +527,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                     </div>
                 </div>
 
-                <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1, position: 'relative' }}>
+                <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1, position: 'relative', flexShrink: 0 }}>
                     <h2 style={{ fontSize: '13px', color: sb.text, margin: 0, fontWeight: '700', letterSpacing: '0.05em' }}>ISSUE TRACKER</h2>
                     {isMobileMenuOpen && (
                         <button
@@ -538,7 +543,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                     )}
                 </div>
 
-                <div style={{ padding: '11px 13px', margin: '16px 13px 8px 13px', backgroundColor: sb.card, borderRadius: '8px', border: `1px solid ${sb.borderLight}` }}>
+                <div style={{ padding: '11px 13px', margin: '16px 13px 8px 13px', backgroundColor: sb.card, borderRadius: '8px', border: `1px solid ${sb.borderLight}`, flexShrink: 0, zIndex: 1, position: 'relative' }}>
                     <h3 style={{ fontSize: '11px', margin: '0 0 4px 0', color: sb.text }}>{user.name || 'Unknown User'}</h3>
                     <p style={{ fontSize: '10px', color: sb.textMuted, margin: '0 0 4px 0', fontWeight: '500' }}>
                         {user.role || 'No Role'} | {user.department || 'No Dept'}
@@ -548,7 +553,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                     </p>
                 </div>
 
-                <div style={{ flex: 1, padding: '8px 13px', overflowY: 'auto' }}>
+                <div style={{ flex: '1 1 0', minHeight: 0, padding: '8px 13px', overflowY: 'auto', WebkitOverflowScrolling: 'touch', zIndex: 1, position: 'relative' }}>
                     <p style={{ fontSize: '10px', fontWeight: '600', color: sb.textSub, marginBottom: '10px', marginTop: '8px', textTransform: 'uppercase', paddingLeft: '6px', letterSpacing: '0.05em' }}>
                         Navigation
                     </p>
@@ -650,7 +655,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                     })}
                 </div>
 
-                <div style={{ padding: '16px', borderTop: `1px solid ${t.border}` }}>
+                <div style={{ padding: '16px', borderTop: `1px solid ${t.border}`, flexShrink: 0, marginTop: 'auto', zIndex: 1, position: 'relative' }}>
                     <button
                         onClick={handleLogout}
                         style={{
@@ -681,7 +686,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                         backgroundColor: 'rgba(0, 0, 0, 0.6)',
                         backdropFilter: 'blur(2px)',
                         WebkitBackdropFilter: 'blur(2px)',
-                        zIndex: 1040,
+                        zIndex: 1090,
                         cursor: 'pointer'
                     }}
                 />
@@ -713,12 +718,15 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                                 .app-header { left: 0 !important; }
                             }
                         `}</style>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <h2 style={{ fontSize: '13px', margin: 0, fontWeight: 600, color: t.text, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                {greeting}, <span style={{ color: '#3b82f6' }}>{user.name ? user.name.split(' ')[0] : 'User'}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0, overflow: 'hidden' }}>
+                            <h2 className="header-greeting-text" style={{ fontSize: '13px', margin: 0, fontWeight: 600, color: t.text, display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <span className="greeting-prefix">{greeting}, </span><span style={{ color: '#3b82f6', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name || 'User'}</span>
                             </h2>
-                            <span style={{ fontSize: '10px', color: t.textMuted, fontWeight: 500 }}>
-                                {dateString} <span style={{ margin: '0 6px', color: t.borderHover }}>|</span> <span style={{ fontFamily: 'monospace', fontSize: '11px', letterSpacing: '0.05em' }}>{timeString}</span>
+                            <span className="header-date-time" style={{ fontSize: '10px', color: t.textMuted, fontWeight: 500, display: 'flex', alignItems: 'center' }}>
+                                <span className="header-date-desktop">{dateString}</span>
+                                <span className="header-date-mobile">{shortDateString}</span>
+                                <span style={{ margin: '0 4px', color: t.borderHover }}>|</span>
+                                <span style={{ fontFamily: 'monospace', fontSize: '10.5px', letterSpacing: '0.04em' }}>{timeString}</span>
                             </span>
                         </div>
                     </div>
@@ -734,8 +742,8 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                     `}</style>
 
                     {/* ACTIONS & LOGO (RIGHT BAR) */}
-                    <div className="header-actions" style={{ display: 'flex', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: '20px' }}>
+                    <div className="header-actions" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                        <div className="header-logo-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: '20px' }}>
                             <img
                                 src="/logo.png"
                                 alt="Ambuja Neotia Logo"
@@ -743,7 +751,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                                 onClick={handleLogoClick}
                                 className={isShining ? 'logo-shine' : ''}
                             />
-                            <span style={{
+                            <span className="header-tagline" style={{
                                 fontSize: '7.5px',
                                 color: t.textMuted,
                                 fontWeight: '500',
@@ -757,12 +765,13 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                         </div>
 
                         <button
+                            className="header-action-btn"
                             onClick={() => setShowCalendar(true)}
                             style={{
                                 background: 'transparent', border: 'none', cursor: 'pointer',
                                 padding: '6px', borderRadius: '50%', marginRight: '8px',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: t.textMuted, transition: 'all 0.2s'
+                                color: t.textMuted, transition: 'all 0.2s', flexShrink: 0
                             }}
                             onMouseOver={(e) => e.currentTarget.style.backgroundColor = t.card}
                             onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -772,6 +781,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                         </button>
 
                         <button
+                            className="header-action-btn"
                             onClick={() => {
                                 setIsDarkMode(!isDarkMode);
                                 setSkyRotation(prev => prev - 180);
@@ -780,7 +790,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                                 background: 'transparent', border: 'none', cursor: 'pointer',
                                 padding: '6px', borderRadius: '50%', marginRight: '12px',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: t.textMuted, transition: 'all 0.2s'
+                                color: t.textMuted, transition: 'all 0.2s', flexShrink: 0
                             }}
                             onMouseOver={(e) => e.currentTarget.style.backgroundColor = t.card}
                             onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -789,16 +799,21 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                             {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
                         </button>
 
-                        <div ref={notifRef} style={{ position: 'relative' }}>
+                        <div ref={notifRef} className="header-notif-wrapper" style={{ position: 'relative', flexShrink: 0, zIndex: 1200 }}>
                             <button
-                                onClick={() => setShowNotifs(!showNotifs)}
+                                className="header-notif-btn"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowNotifs(prev => !prev);
+                                }}
                                 style={{
                                     background: showNotifs ? t.card : 'transparent', border: '1px solid', borderColor: showNotifs ? t.borderHover : 'transparent',
                                     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    padding: '6px', borderRadius: '50%', transition: 'all 0.2s'
+                                    padding: '6px', borderRadius: '50%', transition: 'all 0.2s', flexShrink: 0
                                 }}
                                 onMouseOver={(e) => e.currentTarget.style.backgroundColor = t.card}
                                 onMouseOut={(e) => { if (!showNotifs) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                title="Notifications"
                             >
                                 <Bell size={16} color={unreadCount > 0 ? t.text : t.textMuted} />
 
@@ -816,9 +831,9 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
 
                             {showNotifs && (
                                 <div style={{
-                                    position: 'absolute', top: '100%', right: 0, marginTop: '8px', width: '280px',
+                                    position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: '280px', maxWidth: 'calc(100vw - 16px)',
                                     backgroundColor: t.card, border: `1px solid ${t.borderHover}`, borderRadius: '6px',
-                                    boxShadow: '0 8px 20px rgba(0,0,0,0.2)', overflow: 'hidden'
+                                    boxShadow: '0 8px 20px rgba(0,0,0,0.2)', overflow: 'hidden', zIndex: 2000
                                 }}>
                                     <div style={{ padding: '12px', borderBottom: `1px solid ${t.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: t.surface }}>
                                         <h4 style={{ margin: 0, fontSize: '11px', color: t.text, fontWeight: '600' }}>Notifications</h4>
@@ -885,7 +900,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                     </div>
                 </header>
 
-                <main style={{ padding: '16px 24px 8px 24px', flex: 1, marginTop: '52px', display: 'flex', flexDirection: 'column', minHeight: 0, overflowY: 'auto' }}>
+                <main className="app-main-content" style={{ padding: '16px 24px 8px 24px', flex: 1, marginTop: '52px', display: 'flex', flexDirection: 'column', minHeight: 0, overflowY: 'auto' }}>
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                         {children}
                     </div>

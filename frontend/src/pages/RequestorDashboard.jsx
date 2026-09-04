@@ -136,8 +136,8 @@ const SearchSelect = ({ options, value, onChange, placeholder, usersList }) => {
         });
         if (selected) return typeof selected === 'object' ? selected.label : selected;
         if (Array.isArray(usersList)) {
-            const solver = usersList.find(u => 
-                String(u.employee_id).trim().toLowerCase() === valStr || 
+            const solver = usersList.find(u =>
+                String(u.employee_id).trim().toLowerCase() === valStr ||
                 String(u.email).trim().toLowerCase() === valStr
             );
             if (solver) return `${solver.name} (${solver.phone_number || solver.phone || 'N/A'})`;
@@ -757,8 +757,8 @@ const RequestorDashboard = ({ user, setUser }) => {
     const getSolverDetails = (solverId) => {
         if (!solverId || String(solverId).toLowerCase() === 'nan' || solverId === 'Unassigned') return 'Unassigned';
         const targetStr = String(solverId).trim().toLowerCase();
-        const solver = usersList.find(u => 
-            String(u.employee_id).trim().toLowerCase() === targetStr || 
+        const solver = usersList.find(u =>
+            String(u.employee_id).trim().toLowerCase() === targetStr ||
             String(u.email).trim().toLowerCase() === targetStr
         );
         if (solver) return `${solver.name} (${solver.phone_number || solver.phone || 'N/A'})`;
@@ -948,14 +948,14 @@ const RequestorDashboard = ({ user, setUser }) => {
                                     style={{ borderLeft: t.status !== 'Closed' && t.status !== 'Resolved' ? '2px solid #ef4444' : '2px solid transparent' }}
                                 >
                                     <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }} className="font-bold">
-                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
-                                             <span style={{ color: (isLate(t) || t.SLA_Breach === 'True' || t.SLA_Breach === true) ? '#ef4444' : 'inherit' }}>#{t.ticket_id}</span>
-                                             {t.original_raiser && t.raised_by === user.employee_id && <span style={{ color: '#f59e0b', fontSize: '8px', fontWeight: 'normal', backgroundColor: 'rgba(245,158,11,0.1)', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap', display: 'inline-block' }}>L{t.escalation_level ? String(t.escalation_level).replace('L', '') : '1'} Sub-task</span>}
-                                         </div>
-                                     </td>
-                                     <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                                         <AttachmentBadge attachment={t.attachment} />
-                                     </td>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                                            <span style={{ color: (isLate(t) || t.SLA_Breach === 'True' || t.SLA_Breach === true) ? '#ef4444' : 'inherit' }}>#{t.ticket_id}</span>
+                                            {t.original_raiser && t.raised_by === user.employee_id && <span style={{ color: '#f59e0b', fontSize: '8px', fontWeight: 'normal', backgroundColor: 'rgba(245,158,11,0.1)', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap', display: 'inline-block' }}>L{t.escalation_level ? String(t.escalation_level).replace('L', '') : '1'} Sub-task</span>}
+                                        </div>
+                                    </td>
+                                    <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                                        <AttachmentBadge attachment={t.attachment} />
+                                    </td>
                                     <td style={{ padding: '12px 8px' }}>{t.dept_assigned}</td>
                                     <td style={{ padding: '12px 8px' }}>{t.issue_category}</td>
                                     <td style={{ padding: '12px 8px' }}>{t.activity_category || '-'}</td>
@@ -1002,14 +1002,14 @@ const RequestorDashboard = ({ user, setUser }) => {
                             <Activity size={22} color="#3b82f6" /> My Dashboard
                         </h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <button 
-                                className="btn p-2 text-xs flex-row gap-1" 
-                                onClick={() => setShowKPIs(prev => !prev)} 
+                            <button
+                                className="btn p-2 text-xs flex-row gap-1"
+                                onClick={() => setShowKPIs(prev => !prev)}
                                 title={showKPIs ? "Hide KPI Cards" : "Show KPI Cards"}
-                                style={{ 
-                                    whiteSpace: 'nowrap', 
-                                    borderRadius: '6px', 
-                                    backgroundColor: 'var(--bg-card, #131b2e)', 
+                                style={{
+                                    whiteSpace: 'nowrap',
+                                    borderRadius: '6px',
+                                    backgroundColor: 'var(--bg-card, #131b2e)',
                                     border: '1px solid var(--border, #1e293b)',
                                     color: 'var(--text-main, #f1f5f9)',
                                     fontSize: '11px',
@@ -1092,13 +1092,13 @@ const RequestorDashboard = ({ user, setUser }) => {
                         </div>
                         <form onSubmit={handleRaiseTicket} autoComplete="off">
                             {/* Defeat Chrome Autofill */}
-                            <input autoComplete="false" name="hidden" type="text" style={{display:'none'}} />
+                            <input autoComplete="false" name="hidden" type="text" style={{ display: 'none' }} />
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '6px' }}>
                                 <div className="form-group form-group-sm" style={{ position: 'relative', zIndex: 100 }}><label className="form-label-sm">Department</label><SearchSelect className="dropdown-menu-solid" options={uniqueDepts} value={dept} onChange={(val) => { setDept(val); setAssignedTo(''); }} placeholder="Search Department..." /></div>
                                 <div className="form-group form-group-sm" style={{ position: 'relative', zIndex: 90 }}><label className="form-label-sm">Issue Category</label><SearchSelect className="dropdown-menu-solid" options={uniqueIssueCats} value={issueCat} onChange={setIssueCat} placeholder="Search Issue..." /></div>
                                 <div className="form-group form-group-sm" style={{ position: 'relative', zIndex: 80 }}><label className="form-label-sm">Activity Category</label><SearchSelect className="dropdown-menu-solid" options={uniqueActivityCats} value={activityCat} onChange={setActivityCat} placeholder="Search Activity..." /></div>
                                 <div className="form-group form-group-sm" style={{ position: 'relative', zIndex: 75 }}><label className="form-label-sm">Severity</label><SearchSelect className="dropdown-menu-solid" options={['Major', 'Moderate', 'Minor', 'Urgent']} value={severity} onChange={setSeverity} placeholder="Select Severity..." /></div>
-                                
+
 
                                 <div className="form-group form-group-sm" style={{ position: 'relative', zIndex: 70 }}><label className="form-label-sm">Location</label><SearchSelect className="dropdown-menu-solid" options={locationOptions} value={location} onChange={setLocation} placeholder="Search Location..." /></div>
                                 <div className="form-group form-group-sm" style={{ position: 'relative', zIndex: 60 }}>
@@ -1119,12 +1119,12 @@ const RequestorDashboard = ({ user, setUser }) => {
                                             <span style={{ color: '#10b981', fontSize: '9px', fontWeight: 'normal', marginLeft: '6px' }}>⚡ AI Learned ({smartSuggestions.deadline_hours}h avg)</span>
                                         )}
                                     </label>
-                                    <div 
+                                    <div
                                         style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}
                                         onClick={() => {
                                             const dateEl = document.getElementById('raiseTicketDeadlinePicker');
                                             if (dateEl && dateEl.showPicker) {
-                                                try { dateEl.showPicker(); } catch (err) {}
+                                                try { dateEl.showPicker(); } catch (err) { }
                                             }
                                         }}
                                     >
@@ -1134,19 +1134,19 @@ const RequestorDashboard = ({ user, setUser }) => {
                                             placeholder="dd/mm/yyyy"
                                             required
                                             readOnly
-                                            style={{ 
-                                                padding: '6px 36px 6px 10px', 
-                                                fontSize: '11px', 
-                                                width: '100%', 
+                                            style={{
+                                                padding: '6px 36px 6px 10px',
+                                                fontSize: '11px',
+                                                width: '100%',
                                                 cursor: 'pointer',
                                                 backgroundColor: 'var(--bg-main, #18181b)'
                                             }}
                                             value={
                                                 deadline
                                                     ? (() => {
-                                                          const p = deadline.split('-');
-                                                          return p.length === 3 && p[0].length === 4 ? `${p[2]}/${p[1]}/${p[0]}` : deadline;
-                                                      })()
+                                                        const p = deadline.split('-');
+                                                        return p.length === 3 && p[0].length === 4 ? `${p[2]}/${p[1]}/${p[0]}` : deadline;
+                                                    })()
                                                     : ''
                                             }
                                         />
@@ -1178,56 +1178,56 @@ const RequestorDashboard = ({ user, setUser }) => {
                                     <label className="form-label-sm">Notify Users (CC)</label>
                                     <MultiSearchSelect className="dropdown-menu-solid" options={notifiableUsers} selectedValues={notifyUsers} onChange={setNotifyUsers} placeholder="Search Emails..." />
                                 </div>
-                            <div className="form-group" style={{ marginBottom: '6px' }}>
-                                <label style={{ fontSize: '10px', marginBottom: '4px', display: 'block' }}>Attach File (Optional)</label>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <div style={{ position: 'relative', width: '56px', height: '56px', flexShrink: 0 }}>
-                                        {attachment ? (
-                                            <div onClick={() => {
-                                                if (attachment.type?.startsWith('image/')) setEnlargedPreviewImage(URL.createObjectURL(attachment));
-                                                if (attachment.type === 'application/pdf' || attachment.name?.toLowerCase().endsWith('.pdf')) window.open(URL.createObjectURL(attachment), '_blank');
-                                            }} style={{ position: 'absolute', inset: 0, borderRadius: '6px', overflow: 'hidden', border: '1px solid #10b981', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backgroundColor: (attachment.type === 'application/pdf' || attachment.name?.match(/\.(xlsx|xls|doc|docx)$/i)) ? 'rgba(16, 185, 129, 0.1)' : 'transparent' }}>
-                                                {attachment.type === 'application/pdf' ? (
-                                                    <>
-                                                        <FileText size={24} color="#10b981" />
-                                                        <span style={{ fontSize: '8px', marginTop: '4px', color: '#10b981' }}>PDF Attached</span>
-                                                    </>
-                                                ) : attachment.name?.match(/\.(xlsx|xls|doc|docx)$/i) ? (
-                                                    <>
-                                                        <FileText size={24} color="#10b981" />
-                                                        <span style={{ fontSize: '8px', marginTop: '4px', color: '#10b981' }}>{attachment.name.match(/\.(xlsx|xls)$/i) ? 'Excel' : 'Word'} Attached</span>
-                                                    </>
-                                                ) : (
-                                                    <img src={URL.createObjectURL(attachment)} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} title="Click to enlarge" />
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => { e.preventDefault(); setAttachment(null); setFileName(''); }}
-                                                    style={{ position: 'absolute', top: 0, right: 0, background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '10px', borderRadius: '0 0 0 6px', padding: 0 }}
-                                                    title="Remove file"
-                                                >✕</button>
-                                            </div>
-                                        ) : (
-                                            <div style={{ position: 'relative', width: '100%', height: '100%', border: '2px dashed #71717a', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.04)', transition: 'all 0.2s', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                <input type="file" id="file-upload" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', zIndex: 5, width: '100%', height: '100%' }} accept=".jpg,.jpeg,.png,.pdf,.xlsx,.xls,.doc,.docx,image/jpeg,image/png,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileChange} title="Click to attach file" />
-                                                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#a1a1aa', pointerEvents: 'none' }}>
-                                                    <ImagePlus size={16} style={{ marginBottom: '2px' }} />
-                                                    <span style={{ fontSize: '8px', textAlign: 'center', padding: '0 4px' }}>Add File</span>
+                                <div className="form-group" style={{ marginBottom: '6px' }}>
+                                    <label style={{ fontSize: '10px', marginBottom: '4px', display: 'block' }}>Attach File (Optional)</label>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <div style={{ position: 'relative', width: '56px', height: '56px', flexShrink: 0 }}>
+                                            {attachment ? (
+                                                <div onClick={() => {
+                                                    if (attachment.type?.startsWith('image/')) setEnlargedPreviewImage(URL.createObjectURL(attachment));
+                                                    if (attachment.type === 'application/pdf' || attachment.name?.toLowerCase().endsWith('.pdf')) window.open(URL.createObjectURL(attachment), '_blank');
+                                                }} style={{ position: 'absolute', inset: 0, borderRadius: '6px', overflow: 'hidden', border: '1px solid #10b981', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backgroundColor: (attachment.type === 'application/pdf' || attachment.name?.match(/\.(xlsx|xls|doc|docx)$/i)) ? 'rgba(16, 185, 129, 0.1)' : 'transparent' }}>
+                                                    {attachment.type === 'application/pdf' ? (
+                                                        <>
+                                                            <FileText size={24} color="#10b981" />
+                                                            <span style={{ fontSize: '8px', marginTop: '4px', color: '#10b981' }}>PDF Attached</span>
+                                                        </>
+                                                    ) : attachment.name?.match(/\.(xlsx|xls|doc|docx)$/i) ? (
+                                                        <>
+                                                            <FileText size={24} color="#10b981" />
+                                                            <span style={{ fontSize: '8px', marginTop: '4px', color: '#10b981' }}>{attachment.name.match(/\.(xlsx|xls)$/i) ? 'Excel' : 'Word'} Attached</span>
+                                                        </>
+                                                    ) : (
+                                                        <img src={URL.createObjectURL(attachment)} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} title="Click to enlarge" />
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => { e.preventDefault(); setAttachment(null); setFileName(''); }}
+                                                        style={{ position: 'absolute', top: 0, right: 0, background: 'rgba(239, 68, 68, 0.9)', color: '#fff', border: 'none', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '10px', borderRadius: '0 0 0 6px', padding: 0 }}
+                                                        title="Remove file"
+                                                    >✕</button>
                                                 </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        {isCompressing ? <span style={{ fontSize: '11px', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={13} /> Optimizing file...</span> : fileName ? <span style={{ fontSize: '11px', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 'bold' }}><CheckCircle2 size={13} /> {fileName}</span> : <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Auto-compressed (IMG) / 5MB (DOC)</span>}
+                                            ) : (
+                                                <div style={{ position: 'relative', width: '100%', height: '100%', border: '2px dashed #71717a', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.04)', transition: 'all 0.2s', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <input type="file" id="file-upload" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', zIndex: 5, width: '100%', height: '100%' }} accept=".jpg,.jpeg,.png,.pdf,.xlsx,.xls,.doc,.docx,image/jpeg,image/png,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileChange} title="Click to attach file" />
+                                                    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#a1a1aa', pointerEvents: 'none' }}>
+                                                        <ImagePlus size={16} style={{ marginBottom: '2px' }} />
+                                                        <span style={{ fontSize: '8px', textAlign: 'center', padding: '0 4px' }}>Add File</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            {isCompressing ? <span style={{ fontSize: '11px', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={13} /> Optimizing file...</span> : fileName ? <span style={{ fontSize: '11px', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 'bold' }}><CheckCircle2 size={13} /> {fileName}</span> : <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Auto-compressed (IMG) / 5MB (DOC)</span>}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
                             </div>
 
                             <div className="form-group form-group-sm" style={{ position: 'relative', zIndex: 30, marginBottom: '6px' }}>
                                 <label className="form-label-sm">Description of Issue</label>
                                 <textarea className="form-control" required rows="3" style={{ fontSize: '11px', padding: '6px 10px', minHeight: '60px', maxHeight: '110px', height: 'auto', resize: 'none', overflowY: 'auto', lineHeight: '1.4', margin: 0 }} value={description} onChange={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; setDescription(e.target.value); }} placeholder="Please provide detailed information..."></textarea>
-                                
+
                                 {description && description.trim().length >= 2 && (
                                     <div style={{ marginTop: '4px', padding: '8px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid #3b82f6', boxShadow: '0 4px 12px rgba(59,130,246,0.08)' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -1309,7 +1309,7 @@ const RequestorDashboard = ({ user, setUser }) => {
                                             </div>
                                         ) : (!isSuggesting && (
                                             <div style={{ fontSize: '10px', color: description && description.trim().length >= 3 ? '#f59e0b' : 'var(--text-muted)', fontStyle: 'italic', padding: '4px 0' }}>
-                                                {description && description.trim().length >= 3 
+                                                {description && description.trim().length >= 3
                                                     ? "🤖 AI Assistance: Description is unrecognized or too vague. Please describe the specific issue (e.g., 'Power outage', 'Drawing missing', 'Material shortage') to get AI recommendations."
                                                     : "Type a detailed issue description to get AI category & solver recommendations..."}
                                             </div>
@@ -1362,7 +1362,7 @@ const RequestorDashboard = ({ user, setUser }) => {
             {panelTicket && (() => {
                 const selectedTicket = panelTicket;
                 return (
-                    <div className={isClosing ? "slide-out-right-panel" : "slide-in-right-panel"} style={{
+                    <div className={isClosing ? "slide-out-right-panel ticket-details-panel" : "slide-in-right-panel ticket-details-panel"} style={{
                         position: 'fixed',
                         top: isSidePanelExpanded ? '2vh' : '52px',
                         bottom: isSidePanelExpanded ? '2vh' : '0',
@@ -1380,12 +1380,12 @@ const RequestorDashboard = ({ user, setUser }) => {
                     }}>
 
                         <div style={{ padding: '24px 24px 0 24px', zIndex: 10, backgroundColor: 'var(--bg-card)', borderRadius: isSidePanelExpanded ? '12px 12px 0 0' : 0 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <div className="side-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                 <h3 style={{ margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     #{selectedTicket.ticket_id}
                                     <span style={{ backgroundColor: selectedTicket.status === 'Closed' ? '#e4e4e7' : selectedTicket.status === 'Resolved' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)', color: selectedTicket.status === 'Closed' ? '#71717a' : selectedTicket.status === 'Resolved' ? '#10b981' : '#3b82f6', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>{selectedTicket.status}</span>
                                 </h3>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div className="side-panel-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -1539,7 +1539,7 @@ const RequestorDashboard = ({ user, setUser }) => {
 
                             {activeDetailsTab === 'details' && (
                                 <div style={{ paddingBottom: '40px' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: isSidePanelExpanded ? 'repeat(4, 1fr)' : '1fr 1fr', gap: '14px', fontSize: '12px', color: '#71717a', marginBottom: '16px' }}>
+                                    <div className="ticket-info-grid" style={{ display: 'grid', gridTemplateColumns: isSidePanelExpanded ? 'repeat(4, 1fr)' : '1fr 1fr', gap: '14px', fontSize: '12px', color: '#71717a', marginBottom: '16px' }}>
                                         <div><strong style={{ color: 'var(--text-main)' }}>Raised On:</strong> <span style={{ color: '#a1a1aa' }}>{selectedTicket.timestamp?.split(' ')[0]}</span></div>
                                         {selectedTicket.deadline ? <div><strong style={{ color: 'var(--text-main)' }}>Deadline:</strong> <span style={{ color: '#10b981' }}>{selectedTicket.deadline?.split(' ')[0]}</span></div> : <div></div>}
                                         <div><strong style={{ color: 'var(--text-main)' }}>Current Raiser:</strong> <span style={{ color: '#3b82f6' }}>{selectedTicket.raiser_name || selectedTicket.raised_by}</span></div>
@@ -1554,7 +1554,7 @@ const RequestorDashboard = ({ user, setUser }) => {
                                         {selectedTicket.solved_timestamp && String(selectedTicket.solved_timestamp).toLowerCase() !== 'nan' && selectedTicket.status !== 'Closed' && <div><strong style={{ color: 'var(--text-main)' }}>Resolved On:</strong> <span style={{ color: '#3b82f6' }}>{selectedTicket.solved_timestamp?.split(' ')[0]}</span></div>}
                                         {selectedTicket.closed_timestamp && String(selectedTicket.closed_timestamp).toLowerCase() !== 'nan' && selectedTicket.status === 'Closed' && <div><strong style={{ color: 'var(--text-main)' }}>Closed On:</strong> <span style={{ color: '#10b981' }}>{selectedTicket.closed_timestamp?.split(' ')[0]}</span></div>}
                                     </div>
-                                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '20px', position: 'relative', zIndex: 10 }}>
+                                    <div className="ticket-desc-attachment-row" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '20px', position: 'relative', zIndex: 10 }}>
                                         <div className="detail-box" style={{ flex: 1, minWidth: 0, fontSize: '12px', padding: '14px', borderRadius: '6px', lineHeight: '1.6', backgroundColor: 'var(--bg-main)', height: selectedTicket.attachment && String(selectedTicket.attachment).toLowerCase() !== 'nan' ? '142px' : 'auto', maxHeight: '142px', overflowY: 'auto' }}>
                                             <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '8px', fontSize: '13px' }}>Issue Description:</strong>
                                             <span style={{ color: '#a1a1aa', whiteSpace: 'pre-wrap', display: 'block', wordBreak: 'break-word' }}>
@@ -1643,7 +1643,7 @@ const RequestorDashboard = ({ user, setUser }) => {
                                             <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#10b981' }}>Resolution Review Required</h4>
 
                                             <form onSubmit={handleAcceptSubmit}>
-                                                <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', marginBottom: '16px' }}>
+                                                <div className="ticket-update-form-row" style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', marginBottom: '16px' }}>
                                                     <div style={{ flex: 1 }}>
                                                         <label style={{ fontSize: '10px', color: '#a1a1aa', marginBottom: '4px', display: 'block' }}>Remarks (Mandatory for Acceptance)</label>
                                                         <textarea
@@ -1835,10 +1835,10 @@ const RequestorDashboard = ({ user, setUser }) => {
             )}
 
             {(previewFile || previewUrl) && (
-                <DocumentPreview 
-                    file={previewFile} 
-                    url={previewUrl} 
-                    onClose={() => { setPreviewFile(null); setPreviewUrl(null); }} 
+                <DocumentPreview
+                    file={previewFile}
+                    url={previewUrl}
+                    onClose={() => { setPreviewFile(null); setPreviewUrl(null); }}
                 />
             )}
 

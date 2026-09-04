@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { 
-    BarChart, Bar, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell, 
+import {
+    BarChart, Bar, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell,
     ResponsiveContainer, AreaChart, Area, CartesianGrid, ComposedChart, LabelList, Line
 } from 'recharts';
 import { Filter, XCircle, Maximize2, X, Download, FileText, TrendingUp, BarChart3, MapPin, Users, CheckCircle, AlertTriangle, ShieldAlert, Layers, Clock, Tag } from 'lucide-react';
@@ -19,12 +19,12 @@ const GRADIENT_PAIRS = [
     { start: '#f97316', end: '#fb923c' },   // Orange
 ];
 
-const STATUS_COLORS = { 
-    'Open': '#f59e0b', 
-    'In Progress': '#6366f1', 
-    'Resolved': '#10b981', 
-    'Closed': '#64748b', 
-    'Declined': '#ef4444', 
+const STATUS_COLORS = {
+    'Open': '#f59e0b',
+    'In Progress': '#6366f1',
+    'Resolved': '#10b981',
+    'Closed': '#64748b',
+    'Declined': '#ef4444',
     'On Hold': '#8b5cf6',
     'Escalated': '#f97316'
 };
@@ -44,8 +44,8 @@ const ChartCard = ({ children, onClick, title, subtitle, icon: Icon, accentColor
                 marginBottom: 0,
                 borderRadius: '12px',
                 border: `1px solid ${hovered ? accentColor + '50' : 'rgba(255,255,255,0.06)'}`,
-                background: hovered 
-                    ? `linear-gradient(135deg, ${accentColor}08 0%, transparent 60%), var(--bg-card)` 
+                background: hovered
+                    ? `linear-gradient(135deg, ${accentColor}08 0%, transparent 60%), var(--bg-card)`
                     : 'var(--bg-card)',
                 display: 'flex',
                 flexDirection: 'column',
@@ -53,8 +53,8 @@ const ChartCard = ({ children, onClick, title, subtitle, icon: Icon, accentColor
                 flex,
                 minWidth,
                 transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: hovered 
-                    ? `0 8px 32px ${accentColor}18, 0 0 0 1px ${accentColor}15` 
+                boxShadow: hovered
+                    ? `0 8px 32px ${accentColor}18, 0 0 0 1px ${accentColor}15`
                     : '0 1px 3px rgba(0,0,0,0.12)',
                 transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
                 position: 'relative',
@@ -70,7 +70,7 @@ const ChartCard = ({ children, onClick, title, subtitle, icon: Icon, accentColor
                 opacity: hovered ? 1 : 0.4,
                 transition: 'opacity 0.35s ease'
             }} />
-            
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {Icon && <Icon size={14} color={accentColor} style={{ opacity: 0.8 }} />}
@@ -90,19 +90,19 @@ const ChartCard = ({ children, onClick, title, subtitle, icon: Icon, accentColor
 const SearchSelect = ({ options, value, onChange, placeholder }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
-    
-    const filtered = options.filter(o => 
+
+    const filtered = options.filter(o =>
         o && String(o).toLowerCase().includes(String(search).toLowerCase())
     );
 
     return (
         <div style={{ position: 'relative', width: '100%', maxWidth: '240px' }}>
-            <div 
+            <div
                 onClick={() => setIsOpen(!isOpen)}
-                style={{ 
-                    padding: '8px 12px', 
-                    backgroundColor: 'var(--bg-card)', 
-                    border: '1px solid var(--border)', 
+                style={{
+                    padding: '8px 12px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
                     borderRadius: '6px',
                     fontSize: '13px',
                     cursor: 'pointer',
@@ -117,22 +117,22 @@ const SearchSelect = ({ options, value, onChange, placeholder }) => {
                 </span>
                 <span style={{ fontSize: '10px' }}>▼</span>
             </div>
-            
+
             {isOpen && (
-                <div style={{ 
+                <div style={{
                     position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px',
-                    backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', 
+                    backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
                     borderRadius: '6px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
                     zIndex: 50, maxHeight: '250px', display: 'flex', flexDirection: 'column'
                 }}>
                     <div style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>
-                        <input 
+                        <input
                             autoFocus
-                            type="text" 
-                            placeholder="Search..." 
+                            type="text"
+                            placeholder="Search..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            style={{ 
+                            style={{
                                 width: '100%', padding: '6px 8px', fontSize: '12px',
                                 border: '1px solid var(--border)', borderRadius: '4px',
                                 backgroundColor: 'var(--bg-subtle)', color: 'var(--text-main)',
@@ -141,17 +141,17 @@ const SearchSelect = ({ options, value, onChange, placeholder }) => {
                         />
                     </div>
                     <div style={{ overflowY: 'auto', flex: 1, padding: '4px' }}>
-                        <div 
+                        <div
                             onClick={() => { onChange(''); setIsOpen(false); }}
                             style={{ padding: '8px', fontSize: '13px', cursor: 'pointer', color: 'var(--text-muted)' }}
                         >
                             All
                         </div>
                         {filtered.map(opt => (
-                            <div 
+                            <div
                                 key={opt}
                                 onClick={() => { onChange(opt); setIsOpen(false); }}
-                                style={{ 
+                                style={{
                                     padding: '8px', fontSize: '13px', cursor: 'pointer',
                                     backgroundColor: value === opt ? 'rgba(99,102,241,0.1)' : 'transparent',
                                     color: value === opt ? '#6366f1' : 'var(--text-main)',
@@ -167,22 +167,22 @@ const SearchSelect = ({ options, value, onChange, placeholder }) => {
             )}
         </div>
     );
-};const CustomTooltip = ({ active, payload, label }) => {
+}; const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
-        
+
         if (data.Open !== undefined && data.Closed !== undefined && !data.Raised) {
             return (
-                <div style={{ 
-                    backgroundColor: 'var(--bg-card)', 
+                <div style={{
+                    backgroundColor: 'var(--bg-card)',
                     backdropFilter: 'blur(16px)',
-                    border: '1px solid var(--border)', 
-                    borderRadius: '10px', 
-                    padding: '12px 14px', 
-                    color: 'var(--text-main)', 
-                    fontSize: '12px', 
-                    minWidth: '170px', 
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.25)' 
+                    border: '1px solid var(--border)',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    color: 'var(--text-main)',
+                    fontSize: '12px',
+                    minWidth: '170px',
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.25)'
                 }}>
                     <p style={{ margin: '0 0 10px 0', fontWeight: 700, borderBottom: '1px solid var(--border)', paddingBottom: '8px', color: 'var(--text-main)', fontSize: '13px' }}>
                         {label || data.name || data.department || data.location}
@@ -202,16 +202,16 @@ const SearchSelect = ({ options, value, onChange, placeholder }) => {
 
         if (data.Raised !== undefined && data.Solved !== undefined) {
             return (
-                <div style={{ 
-                    backgroundColor: 'var(--bg-card)', 
+                <div style={{
+                    backgroundColor: 'var(--bg-card)',
                     backdropFilter: 'blur(16px)',
-                    border: '1px solid var(--border)', 
-                    borderRadius: '10px', 
-                    padding: '12px 14px', 
-                    color: 'var(--text-main)', 
-                    fontSize: '12px', 
-                    minWidth: '170px', 
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.25)' 
+                    border: '1px solid var(--border)',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    color: 'var(--text-main)',
+                    fontSize: '12px',
+                    minWidth: '170px',
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.25)'
                 }}>
                     <p style={{ margin: '0 0 10px 0', fontWeight: 700, borderBottom: '1px solid var(--border)', paddingBottom: '8px', color: 'var(--text-main)', fontSize: '13px' }}>
                         {label || data.user}
@@ -226,19 +226,19 @@ const SearchSelect = ({ options, value, onChange, placeholder }) => {
                 </div>
             );
         }
-        
+
         const pieLabel = payload[0].name || label;
         return (
-            <div style={{ 
-                backgroundColor: 'var(--bg-card)', 
+            <div style={{
+                backgroundColor: 'var(--bg-card)',
                 backdropFilter: 'blur(16px)',
-                border: '1px solid var(--border)', 
-                borderRadius: '10px', 
-                padding: '12px 14px', 
-                color: 'var(--text-main)', 
-                fontSize: '12px', 
-                minWidth: '150px', 
-                boxShadow: '0 10px 25px rgba(0,0,0,0.25)' 
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '12px 14px',
+                color: 'var(--text-main)',
+                fontSize: '12px',
+                minWidth: '150px',
+                boxShadow: '0 10px 25px rgba(0,0,0,0.25)'
             }}>
                 {pieLabel && <p style={{ margin: '0 0 8px 0', fontWeight: 700, borderBottom: '1px solid var(--border)', paddingBottom: '8px', color: 'var(--text-main)', fontSize: '13px' }}>{pieLabel}</p>}
                 {payload.map((entry, index) => (
@@ -277,7 +277,7 @@ const CustomLegend = ({ payload }) => (
 const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
     const [showFilters, setShowFilters] = useState(false);
     const [enlargedChart, setEnlargedChart] = useState(null);
-    
+
     // Filters
     const [filterDept, setFilterDept] = useState('');
     const [filterLocation, setFilterLocation] = useState('');
@@ -382,14 +382,14 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
             const matchDept = !filterDept || (t.dept_assigned && t.dept_assigned.toLowerCase().includes(filterDept.toLowerCase()));
             const matchLocation = !filterLocation || (t.location && t.location.toLowerCase().includes(filterLocation.toLowerCase()));
             const matchStatus = !filterStatus || (t.status && t.status.toLowerCase().includes(filterStatus.toLowerCase()));
-            
+
             let matchTime = true;
             if (filterTime && filterTime !== 'All Time' && t.timestamp) {
                 try {
                     const [datePart] = t.timestamp.split(' ');
                     const [day, month, year] = datePart.split('-');
                     const ticketDate = new Date(year, month - 1, day);
-                    
+
                     if (filterTime === 'Today') {
                         matchTime = ticketDate.getTime() === today.getTime();
                     } else if (filterTime === 'Last 7 Days') {
@@ -413,7 +413,7 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                         twelveMonthsAgo.setMonth(today.getMonth() - 12);
                         matchTime = ticketDate < twelveMonthsAgo;
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
             return matchDept && matchLocation && matchStatus && matchTime;
         });
@@ -428,14 +428,14 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
             const matchDept = !localFilterDept || (t.dept_assigned && t.dept_assigned.toLowerCase().includes(localFilterDept.toLowerCase()));
             const matchLocation = !localFilterLocation || (t.location && t.location.toLowerCase().includes(localFilterLocation.toLowerCase()));
             const matchStatus = !localFilterStatus || (t.status && t.status.toLowerCase().includes(localFilterStatus.toLowerCase()));
-            
+
             let matchTime = true;
             if (localFilterTime && localFilterTime !== 'All Time' && t.timestamp) {
                 try {
                     const [datePart] = t.timestamp.split(' ');
                     const [day, month, year] = datePart.split('-');
                     const ticketDate = new Date(year, month - 1, day);
-                    
+
                     if (localFilterTime === 'Today') {
                         matchTime = ticketDate.getTime() === today.getTime();
                     } else if (localFilterTime === 'Last 7 Days') {
@@ -459,20 +459,70 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                         twelveMonthsAgo.setMonth(today.getMonth() - 12);
                         matchTime = ticketDate < twelveMonthsAgo;
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
             return matchDept && matchLocation && matchStatus && matchTime;
         });
     }, [tickets, localFilterDept, localFilterLocation, localFilterStatus, localFilterTime]);
 
+    // Helper to robustly parse deadline dates in DD-MM-YYYY HH:mm, YYYY-MM-DD, or ISO format
+    const checkTicketLate = (t) => {
+        if (t.SLA_Breach === 'True' || t.SLA_Breach === true) return true;
+        if (!t.deadline || String(t.deadline).toLowerCase() === 'nan') return false;
+        const st = (t.status || '').toLowerCase();
+        if (st === 'closed' || st === 'resolved') return false;
+        try {
+            const raw = String(t.deadline).trim();
+            const parts = raw.split(' ');
+            const dateParts = parts[0].includes('-') ? parts[0].split('-') : parts[0].split('/');
+            if (dateParts.length === 3) {
+                const [p1, p2, p3] = dateParts;
+                const timePart = parts[1] || '23:59';
+                const [hr, min] = timePart.split(':');
+                let d;
+                if (p1.length === 4) {
+                    // YYYY-MM-DD
+                    d = new Date(Number(p1), Number(p2) - 1, Number(p3), Number(hr || 0), Number(min || 0));
+                } else {
+                    // DD-MM-YYYY
+                    d = new Date(Number(p3), Number(p2) - 1, Number(p1), Number(hr || 0), Number(min || 0));
+                }
+                if (!isNaN(d.getTime())) return new Date() > d;
+            }
+            const fallbackDate = new Date(raw);
+            return !isNaN(fallbackDate.getTime()) && new Date() > fallbackDate;
+        } catch (e) {
+            return false;
+        }
+    };
+
+    // Helper to normalize status into canonical display groups
+    const normalizeStatus = (statusStr, closureType) => {
+        const s = String(statusStr || '').trim().toLowerCase();
+        const ct = String(closureType || '').trim().toLowerCase();
+        if (ct === 'declined' || s === 'declined' || s === 'rejected') return 'Declined';
+        if (ct === 'on hold' || s === 'on hold' || s === 'on-hold') return 'On Hold';
+        if (s === 'in progress' || s === 'in-progress') return 'In Progress';
+        if (s === 'open') return 'Open';
+        if (s === 'resolved') return 'Resolved';
+        if (s === 'closed') return 'Closed';
+        if (s === 'escalate' || s === 'escalated') return 'Escalated';
+        return statusStr ? String(statusStr).trim() : 'Open';
+    };
+
     // --- AGGREGATIONS ---
     const deptStats = useMemo(() => {
         const stats = {};
         filteredTickets.forEach(t => {
-            const d = t.dept_assigned || 'Unknown';
-            if (!stats[d]) stats[d] = { department: d, total: 0, Open: 0, 'In Progress': 0, Resolved: 0, Closed: 0, Declined: 0, 'On Hold': 0 };
+            const d = t.dept_assigned || t.department || 'General';
+            if (!stats[d]) stats[d] = { department: d, total: 0, Open: 0, 'In Progress': 0, Resolved: 0, Closed: 0, Declined: 0, 'On Hold': 0, Escalated: 0 };
             stats[d].total += 1;
-            if (stats[d][t.status] !== undefined) stats[d][t.status] += 1;
+            const norm = normalizeStatus(t.status, t.closure_type);
+            if (stats[d][norm] !== undefined) {
+                stats[d][norm] += 1;
+            } else {
+                stats[d][norm] = 1;
+            }
         });
         return Object.values(stats).sort((a, b) => b.total - a.total);
     }, [filteredTickets]);
@@ -481,7 +531,7 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
     const categoryStats = useMemo(() => {
         const stats = {};
         filteredTickets.forEach(t => {
-            const cat = t.issue_category || 'Uncategorized';
+            const cat = t.issue_category || t.category || 'General';
             if (!stats[cat]) stats[cat] = { category: cat, tickets: 0 };
             stats[cat].tickets += 1;
         });
@@ -491,21 +541,11 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
     // 6. SLA Compliance by Department
     const slaDeptStats = useMemo(() => {
         const stats = {};
-        const isLateTicket = (t) => {
-            if (t.SLA_Breach === 'True' || t.SLA_Breach === true) return true;
-            if (!t.deadline || String(t.deadline).toLowerCase() === 'nan') return false;
-            if (t.status === 'Closed' || t.status === 'Resolved') return false;
-            try {
-                const dl = new Date(t.deadline);
-                return !isNaN(dl.getTime()) && new Date() > dl;
-            } catch (e) { return false; }
-        };
-
         filteredTickets.forEach(t => {
-            const d = t.dept_assigned || 'Unknown';
+            const d = t.dept_assigned || t.department || 'General';
             if (!stats[d]) stats[d] = { department: d, compliant: 0, breached: 0, total: 0 };
             stats[d].total += 1;
-            if (isLateTicket(t)) {
+            if (checkTicketLate(t)) {
                 stats[d].breached += 1;
             } else {
                 stats[d].compliant += 1;
@@ -529,9 +569,17 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
     const turnaroundStats = useMemo(() => {
         const stats = {};
         filteredTickets.forEach(t => {
-            if (t.status === 'Resolved' || t.status === 'Closed') {
-                const d = t.dept_assigned || 'Unknown';
-                const days = t.solver_resolution_hours ? (Number(t.solver_resolution_hours) / 24) : 0;
+            const st = (t.status || '').toLowerCase();
+            if (st === 'resolved' || st === 'closed') {
+                const d = t.dept_assigned || t.department || 'General';
+                let days = 0;
+                if (t.solver_resolution_hours && Number(t.solver_resolution_hours) > 0) {
+                    days = Number(t.solver_resolution_hours) / 24;
+                } else if (t.total_turnaround_hours && Number(t.total_turnaround_hours) > 0) {
+                    days = Number(t.total_turnaround_hours) / 24;
+                } else if (t.ticket_age_hours && Number(t.ticket_age_hours) > 0) {
+                    days = Number(t.ticket_age_hours) / 24;
+                }
                 if (days > 0) {
                     if (!stats[d]) stats[d] = { department: d, totalDays: 0, count: 0 };
                     stats[d].totalDays += days;
@@ -546,19 +594,26 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
     }, [filteredTickets]);
 
     const statusBreakdown = useMemo(() => {
-        const counts = { 'Open': 0, 'In Progress': 0, 'Resolved': 0, 'Closed': 0, 'Declined': 0, 'On Hold': 0 };
-        filteredTickets.forEach(t => { if (counts[t.status] !== undefined) counts[t.status]++; });
+        const counts = {};
+        filteredTickets.forEach(t => {
+            const norm = normalizeStatus(t.status, t.closure_type);
+            counts[norm] = (counts[norm] || 0) + 1;
+        });
         return Object.keys(counts).filter(k => counts[k] > 0).map(k => ({ name: k, value: counts[k] }));
     }, [filteredTickets]);
 
     const locationLoad = useMemo(() => {
         const stats = {};
         filteredTickets.forEach(t => {
-            if (!t.location) return;
-            const l = t.location;
-            if (!stats[l]) stats[l] = { location: l, tickets: 0, Open: 0, 'In Progress': 0, Resolved: 0, Closed: 0, Declined: 0, 'On Hold': 0 };
+            const l = t.location || t.project || 'General';
+            if (!stats[l]) stats[l] = { location: l, tickets: 0, Open: 0, 'In Progress': 0, Resolved: 0, Closed: 0, Declined: 0, 'On Hold': 0, Escalated: 0 };
             stats[l].tickets += 1;
-            if (stats[l][t.status] !== undefined) stats[l][t.status] += 1;
+            const norm = normalizeStatus(t.status, t.closure_type);
+            if (stats[l][norm] !== undefined) {
+                stats[l][norm] += 1;
+            } else {
+                stats[l][norm] = 1;
+            }
         });
         return Object.values(stats).sort((a, b) => b.tickets - a.tickets).slice(0, 10);
     }, [filteredTickets]);
@@ -579,16 +634,9 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
     const userStats = useMemo(() => {
         const stats = {};
 
-        const isLate = (t) => {
-            if (!t.deadline || String(t.deadline).toLowerCase() === 'nan') return false;
-            if (t.status === 'Closed' || t.status === 'Resolved') return false;
-            const dl = new Date(t.deadline);
-            return new Date() > dl;
-        };
-
         filteredTickets.forEach(t => {
             // Count Raised
-            const raiser = getCleanName(t.raised_by, t.raiser_name);
+            const raiser = getCleanName(t.raised_by, t.raiser_name) || t.raiser_name || t.raised_by || 'Unknown';
             if (raiser) {
                 if (!stats[raiser]) stats[raiser] = { user: raiser, Raised: 0, Solved: 0, activity: 0, OpenLoad: 0, SLA: 0 };
                 stats[raiser].Raised += 1;
@@ -596,23 +644,25 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
             }
 
             // Count Solved (Assigned To)
-            if (t.assigned_to) {
-                const solver = getCleanName(t.assigned_to, t.assigned_to_name || t.solver_name);
+            const solverRaw = t.assigned_to || t.assigned_to_name || t.solver_name;
+            if (solverRaw) {
+                const solver = getCleanName(t.assigned_to, t.assigned_to_name || t.solver_name) || t.assigned_to_name || t.solver_name || t.assigned_to;
                 if (solver) {
                     if (!stats[solver]) stats[solver] = { user: solver, Raised: 0, Solved: 0, activity: 0, OpenLoad: 0, SLA: 0 };
                     stats[solver].Solved += 1;
                     stats[solver].activity += 1;
-                    
-                    if (t.status === 'Open' || t.status === 'In Progress') {
+
+                    const st = (t.status || '').toLowerCase();
+                    if (st === 'open' || st === 'in progress') {
                         stats[solver].OpenLoad += 1;
                     }
-                    if (isLate(t)) {
+                    if (checkTicketLate(t)) {
                         stats[solver].SLA += 1;
                     }
                 }
             }
         });
-        
+
         return Object.values(stats).sort((a, b) => b.activity - a.activity).slice(0, 15);
     }, [filteredTickets, getCleanName]);
 
@@ -621,21 +671,30 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
         if (enlargedChart === 'deptStats' || enlargedChart === 'statusBreakdown') {
             const stats = {};
             localFilteredTickets.forEach(t => {
-                const d = t.dept_assigned || 'Unknown';
-                if (!stats[d]) stats[d] = { department: d, total: 0, Open: 0, 'In Progress': 0, Resolved: 0, Closed: 0, Declined: 0, 'On Hold': 0 };
+                const d = t.dept_assigned || t.department || 'General';
+                if (!stats[d]) stats[d] = { department: d, total: 0, Open: 0, 'In Progress': 0, Resolved: 0, Closed: 0, Declined: 0, 'On Hold': 0, Escalated: 0 };
                 stats[d].total += 1;
-                if (stats[d][t.status] !== undefined) stats[d][t.status] += 1;
+                const norm = normalizeStatus(t.status, t.closure_type);
+                if (stats[d][norm] !== undefined) {
+                    stats[d][norm] += 1;
+                } else {
+                    stats[d][norm] = 1;
+                }
             });
             return Object.values(stats).sort((a, b) => b.total - a.total);
         }
         if (enlargedChart === 'locationLoad') {
             const stats = {};
             localFilteredTickets.forEach(t => {
-                if (!t.location) return;
-                const l = t.location;
-                if (!stats[l]) stats[l] = { location: l, tickets: 0, Open: 0, 'In Progress': 0, Resolved: 0, Closed: 0, Declined: 0, 'On Hold': 0 };
+                const l = t.location || t.project || 'General';
+                if (!stats[l]) stats[l] = { location: l, tickets: 0, Open: 0, 'In Progress': 0, Resolved: 0, Closed: 0, Declined: 0, 'On Hold': 0, Escalated: 0 };
                 stats[l].tickets += 1;
-                if (stats[l][t.status] !== undefined) stats[l][t.status] += 1;
+                const norm = normalizeStatus(t.status, t.closure_type);
+                if (stats[l][norm] !== undefined) {
+                    stats[l][norm] += 1;
+                } else {
+                    stats[l][norm] = 1;
+                }
             });
             return Object.values(stats).sort((a, b) => b.tickets - a.tickets).slice(0, 10);
         }
@@ -654,14 +713,15 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
         if (enlargedChart === 'userStats') {
             const stats = {};
             localFilteredTickets.forEach(t => {
-                const raiser = getCleanName(t.raised_by, t.raiser_name);
+                const raiser = getCleanName(t.raised_by, t.raiser_name) || t.raiser_name || t.raised_by || 'Unknown';
                 if (raiser) {
                     if (!stats[raiser]) stats[raiser] = { user: raiser, Raised: 0, Solved: 0, activity: 0 };
                     stats[raiser].Raised += 1;
                     stats[raiser].activity += 1;
                 }
-                if (t.assigned_to) {
-                    const solver = getCleanName(t.assigned_to, t.assigned_to_name || t.solver_name);
+                const solverRaw = t.assigned_to || t.assigned_to_name || t.solver_name;
+                if (solverRaw) {
+                    const solver = getCleanName(t.assigned_to, t.assigned_to_name || t.solver_name) || t.assigned_to_name || t.solver_name || t.assigned_to;
                     if (solver) {
                         if (!stats[solver]) stats[solver] = { user: solver, Raised: 0, Solved: 0, activity: 0 };
                         stats[solver].Solved += 1;
@@ -672,14 +732,17 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
             return Object.values(stats).sort((a, b) => b.activity - a.activity).slice(0, 15);
         }
         if (enlargedChart === 'globalPie') {
-            const counts = { 'Open': 0, 'In Progress': 0, 'Resolved': 0, 'Closed': 0, 'Declined': 0, 'On Hold': 0 };
-            localFilteredTickets.forEach(t => { if (counts[t.status] !== undefined) counts[t.status]++; });
+            const counts = {};
+            localFilteredTickets.forEach(t => {
+                const norm = normalizeStatus(t.status, t.closure_type);
+                counts[norm] = (counts[norm] || 0) + 1;
+            });
             return Object.keys(counts).filter(k => counts[k] > 0).map(k => ({ name: k, value: counts[k] }));
         }
         if (enlargedChart === 'categoryStats') {
             const stats = {};
             localFilteredTickets.forEach(t => {
-                const cat = t.issue_category || 'Uncategorized';
+                const cat = t.issue_category || t.category || 'General';
                 if (!stats[cat]) stats[cat] = { category: cat, tickets: 0 };
                 stats[cat].tickets += 1;
             });
@@ -687,20 +750,11 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
         }
         if (enlargedChart === 'slaDeptStats') {
             const stats = {};
-            const isLateTicket = (t) => {
-                if (t.SLA_Breach === 'True' || t.SLA_Breach === true) return true;
-                if (!t.deadline || String(t.deadline).toLowerCase() === 'nan') return false;
-                if (t.status === 'Closed' || t.status === 'Resolved') return false;
-                try {
-                    const dl = new Date(t.deadline);
-                    return !isNaN(dl.getTime()) && new Date() > dl;
-                } catch (e) { return false; }
-            };
             localFilteredTickets.forEach(t => {
-                const d = t.dept_assigned || 'Unknown';
+                const d = t.dept_assigned || t.department || 'General';
                 if (!stats[d]) stats[d] = { department: d, compliant: 0, breached: 0, total: 0 };
                 stats[d].total += 1;
-                if (isLateTicket(t)) stats[d].breached += 1;
+                if (checkTicketLate(t)) stats[d].breached += 1;
                 else stats[d].compliant += 1;
             });
             return Object.values(stats).sort((a, b) => b.total - a.total);
@@ -717,9 +771,17 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
         if (enlargedChart === 'turnaroundStats') {
             const stats = {};
             localFilteredTickets.forEach(t => {
-                if (t.status === 'Resolved' || t.status === 'Closed') {
-                    const d = t.dept_assigned || 'Unknown';
-                    const days = t.solver_resolution_hours ? (Number(t.solver_resolution_hours) / 24) : 0;
+                const st = (t.status || '').toLowerCase();
+                if (st === 'resolved' || st === 'closed') {
+                    const d = t.dept_assigned || t.department || 'General';
+                    let days = 0;
+                    if (t.solver_resolution_hours && Number(t.solver_resolution_hours) > 0) {
+                        days = Number(t.solver_resolution_hours) / 24;
+                    } else if (t.total_turnaround_hours && Number(t.total_turnaround_hours) > 0) {
+                        days = Number(t.total_turnaround_hours) / 24;
+                    } else if (t.ticket_age_hours && Number(t.ticket_age_hours) > 0) {
+                        days = Number(t.ticket_age_hours) / 24;
+                    }
                     if (days > 0) {
                         if (!stats[d]) stats[d] = { department: d, totalDays: 0, count: 0 };
                         stats[d].totalDays += days;
@@ -745,6 +807,7 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
     const maxUserTotal = userStats.length > 0 ? Math.max(...userStats.map(u => (u.Raised || 0) + (u.Solved || 0))) : 0;
     const maxDeptTotal = deptStats.length > 0 ? deptStats[0].total : 0;
     const maxLocTotal = locationLoad.length > 0 ? locationLoad[0].tickets : 0;
+    const maxCatTotal = categoryStats.length > 0 ? categoryStats[0].tickets : 0;
 
     const getTickCount = (maxVal) => {
         const domainMax = maxVal === 0 ? 4 : maxVal + 2;
@@ -755,25 +818,25 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
     const GradientDefs = () => (
         <defs>
             <linearGradient id="gradUser1" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#6366f1" stopOpacity={1}/>
-                <stop offset="100%" stopColor="#4f46e5" stopOpacity={0.8}/>
+                <stop offset="0%" stopColor="#6366f1" stopOpacity={1} />
+                <stop offset="100%" stopColor="#4f46e5" stopOpacity={0.8} />
             </linearGradient>
             <linearGradient id="gradUser2" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#f59e0b" stopOpacity={1}/>
-                <stop offset="100%" stopColor="#d97706" stopOpacity={0.8}/>
+                <stop offset="0%" stopColor="#f59e0b" stopOpacity={1} />
+                <stop offset="100%" stopColor="#d97706" stopOpacity={0.8} />
             </linearGradient>
             <linearGradient id="gradArea" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35}/>
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02}/>
+                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
+                <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
             </linearGradient>
             <linearGradient id="gradAreaStroke" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#818cf8"/>
-                <stop offset="100%" stopColor="#6366f1"/>
+                <stop offset="0%" stopColor="#818cf8" />
+                <stop offset="100%" stopColor="#6366f1" />
             </linearGradient>
             {GRADIENT_PAIRS.map((pair, i) => (
                 <linearGradient key={`grad-h-${i}`} id={`gradH${i}`} x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor={pair.start} stopOpacity={0.9}/>
-                    <stop offset="100%" stopColor={pair.end} stopOpacity={1}/>
+                    <stop offset="0%" stopColor={pair.start} stopOpacity={0.9} />
+                    <stop offset="100%" stopColor={pair.end} stopOpacity={1} />
                 </linearGradient>
             ))}
         </defs>
@@ -786,8 +849,8 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                 <BarChart data={localStats} layout="vertical" margin={{ left: 50, right: 30 }} barCategoryGap="20%">
                     <GradientDefs />
                     <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={false} stroke="rgba(255,255,255,0.05)" />
-                    <XAxis type="number" domain={[0, dataMax => dataMax === 0 ? 4 : dataMax + 2]} tickCount={getTickCount(maxVal)} tick={{fontSize: 12, fill: '#a1a1aa'}} tickLine={false} axisLine={false} allowDecimals={false} />
-                    <YAxis type="category" dataKey="department" tick={{fontSize: 12, fill: '#d4d4d8'}} tickLine={false} axisLine={false} />
+                    <XAxis type="number" domain={[0, maxVal <= 0 ? 4 : maxVal + 2]} tickCount={getTickCount(maxVal)} tick={{ fontSize: 12, fill: '#a1a1aa' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <YAxis type="category" dataKey="department" tick={{ fontSize: 12, fill: '#d4d4d8' }} tickLine={false} axisLine={false} />
                     <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} content={<CustomTooltip />} />
                     <Bar dataKey="total" radius={[0, 6, 6, 0]} maxBarSize={50} animationDuration={800}>
                         <LabelList dataKey="total" position="insideRight" fill="#fff" fontSize={12} fontWeight={600} />
@@ -802,8 +865,8 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
             <AreaChart data={localStats}>
                 <GradientDefs />
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="date" tick={{fontSize: 12, fill: '#a1a1aa'}} tickLine={false} axisLine={false} />
-                <YAxis tick={{fontSize: 12, fill: '#a1a1aa'}} tickLine={false} axisLine={false} allowDecimals={false} />
+                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#a1a1aa' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 12, fill: '#a1a1aa' }} tickLine={false} axisLine={false} allowDecimals={false} />
                 <Tooltip cursor={{ stroke: '#6366f1', strokeWidth: 1, strokeDasharray: '4 4' }} content={<CustomTooltip />} />
                 <Area type="monotone" dataKey="tickets" stroke="url(#gradAreaStroke)" strokeWidth={2.5} fillOpacity={1} fill="url(#gradArea)" name="Tickets Raised" dot={{ fill: '#6366f1', strokeWidth: 0, r: 3 }} activeDot={{ r: 5, fill: '#818cf8', stroke: '#6366f1', strokeWidth: 2 }} />
             </AreaChart>
@@ -814,8 +877,8 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                 <ComposedChart data={localStats} margin={{ top: 20 }} barCategoryGap="20%">
                     <GradientDefs />
                     <CartesianGrid strokeDasharray="3 3" vertical={false} horizontal={true} stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="user" tick={{fontSize: 12, fill: '#d4d4d8'}} tickLine={false} axisLine={false} angle={-45} textAnchor="end" height={80} />
-                    <YAxis domain={[0, dataMax => dataMax === 0 ? 4 : dataMax + 2]} tickCount={getTickCount(maxVal)} tick={{fontSize: 12, fill: '#a1a1aa'}} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <XAxis dataKey="user" tick={{ fontSize: 12, fill: '#d4d4d8' }} tickLine={false} axisLine={false} angle={-45} textAnchor="end" height={80} />
+                    <YAxis domain={[0, maxVal <= 0 ? 4 : maxVal + 2]} tickCount={getTickCount(maxVal)} tick={{ fontSize: 12, fill: '#a1a1aa' }} tickLine={false} axisLine={false} allowDecimals={false} />
                     <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} content={<CustomTooltip />} />
                     <Legend content={<CustomLegend />} />
                     <Bar dataKey="Raised" stackId="a" fill="url(#gradUser1)" maxBarSize={60} />
@@ -830,8 +893,8 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
             <BarChart data={localStats} stackOffset="expand">
                 <GradientDefs />
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="department" tick={{fontSize: 12, fill: '#d4d4d8'}} tickLine={false} axisLine={false} />
-                <YAxis tick={{fontSize: 12, fill: '#a1a1aa'}} tickLine={false} axisLine={false} tickFormatter={(tick) => `${tick * 100}%`} />
+                <XAxis dataKey="department" tick={{ fontSize: 12, fill: '#d4d4d8' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 12, fill: '#a1a1aa' }} tickLine={false} axisLine={false} tickFormatter={(tick) => `${tick * 100}%`} />
                 <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} content={<CustomTooltip />} />
                 <Legend content={<CustomLegend />} />
                 <Bar dataKey="Open" stackId="a" fill={STATUS_COLORS['Open']} />
@@ -846,8 +909,8 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                 <BarChart data={localStats} layout="vertical" margin={{ left: 50, right: 30 }} barCategoryGap="20%">
                     <GradientDefs />
                     <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={false} stroke="rgba(255,255,255,0.05)" />
-                    <XAxis type="number" domain={[0, dataMax => dataMax === 0 ? 4 : dataMax + 2]} tickCount={getTickCount(maxVal)} tick={{fontSize: 12, fill: '#a1a1aa'}} tickLine={false} axisLine={false} allowDecimals={false} />
-                    <YAxis dataKey="location" type="category" tick={{fontSize: 12, fill: '#d4d4d8'}} tickLine={false} axisLine={false} />
+                    <XAxis type="number" domain={[0, maxVal <= 0 ? 4 : maxVal + 2]} tickCount={getTickCount(maxVal)} tick={{ fontSize: 12, fill: '#a1a1aa' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <YAxis dataKey="location" type="category" tick={{ fontSize: 12, fill: '#d4d4d8' }} tickLine={false} axisLine={false} />
                     <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} content={<CustomTooltip />} />
                     <Bar dataKey="tickets" radius={[0, 6, 6, 0]} maxBarSize={50} animationDuration={800}>
                         <LabelList dataKey="tickets" position="insideRight" fill="#fff" fontSize={12} fontWeight={600} />
@@ -862,18 +925,18 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
             const total = localStats.reduce((s, e) => s + e.value, 0);
             return (
                 <PieChart>
-                    <Pie 
-                        data={localStats} 
-                        cx="50%" 
+                    <Pie
+                        data={localStats}
+                        cx="50%"
                         cy="45%"
-                        innerRadius="45%" 
-                        outerRadius="72%" 
-                        paddingAngle={3} 
-                        dataKey="value" 
-                        label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`} 
+                        innerRadius="45%"
+                        outerRadius="72%"
+                        paddingAngle={3}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                         labelLine={{ stroke: 'var(--text-muted)', strokeWidth: 1 }}
                         animationDuration={800}
-                        stroke="rgba(0,0,0,0.2)" 
+                        stroke="rgba(0,0,0,0.2)"
                         strokeWidth={1}
                     >
                         {localStats.map((entry, index) => (
@@ -892,8 +955,8 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                 <BarChart data={localStats} layout="vertical" margin={{ left: 50, right: 30 }} barCategoryGap="20%">
                     <GradientDefs />
                     <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={false} stroke="rgba(255,255,255,0.05)" />
-                    <XAxis type="number" domain={[0, dataMax => dataMax === 0 ? 4 : dataMax + 2]} tickCount={getTickCount(maxVal)} tick={{fontSize: 12, fill: '#a1a1aa'}} tickLine={false} axisLine={false} allowDecimals={false} />
-                    <YAxis dataKey="category" type="category" tick={{fontSize: 12, fill: '#d4d4d8'}} tickLine={false} axisLine={false} width={130} />
+                    <XAxis type="number" domain={[0, maxVal <= 0 ? 4 : maxVal + 2]} tickCount={getTickCount(maxVal)} tick={{ fontSize: 12, fill: '#a1a1aa' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <YAxis dataKey="category" type="category" tick={{ fontSize: 12, fill: '#d4d4d8' }} tickLine={false} axisLine={false} width={130} />
                     <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} content={<CustomTooltip />} />
                     <Bar dataKey="tickets" radius={[0, 6, 6, 0]} maxBarSize={50} animationDuration={800}>
                         <LabelList dataKey="tickets" position="insideRight" fill="#fff" fontSize={12} fontWeight={600} />
@@ -909,8 +972,8 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                 <BarChart data={localStats} margin={{ top: 20, right: 30, left: 20 }}>
                     <GradientDefs />
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="department" tick={{fontSize: 12, fill: '#d4d4d8'}} tickLine={false} axisLine={false} />
-                    <YAxis tick={{fontSize: 12, fill: '#a1a1aa'}} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <XAxis dataKey="department" tick={{ fontSize: 12, fill: '#d4d4d8' }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: '#a1a1aa' }} tickLine={false} axisLine={false} allowDecimals={false} />
                     <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} content={<CustomTooltip />} />
                     <Legend content={<CustomLegend />} />
                     <Bar dataKey="compliant" name="Within SLA" stackId="a" fill="#10b981" maxBarSize={60} />
@@ -922,18 +985,18 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
             const total = localStats.reduce((s, e) => s + e.value, 0);
             return (
                 <PieChart>
-                    <Pie 
-                        data={localStats} 
-                        cx="50%" 
+                    <Pie
+                        data={localStats}
+                        cx="50%"
                         cy="45%"
-                        innerRadius="45%" 
-                        outerRadius="72%" 
-                        paddingAngle={4} 
-                        dataKey="value" 
-                        label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`} 
+                        innerRadius="45%"
+                        outerRadius="72%"
+                        paddingAngle={4}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                         labelLine={{ stroke: 'var(--text-muted)', strokeWidth: 1 }}
                         animationDuration={800}
-                        stroke="rgba(0,0,0,0.2)" 
+                        stroke="rgba(0,0,0,0.2)"
                         strokeWidth={1}
                     >
                         {localStats.map((entry, index) => {
@@ -952,13 +1015,13 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                 <BarChart data={localStats} margin={{ top: 20, right: 30, left: 20 }}>
                     <defs>
                         <linearGradient id="turnGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#14b8a6" stopOpacity={1}/>
-                            <stop offset="100%" stopColor="#0d9488" stopOpacity={0.7}/>
+                            <stop offset="0%" stopColor="#14b8a6" stopOpacity={1} />
+                            <stop offset="100%" stopColor="#0d9488" stopOpacity={0.7} />
                         </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="department" tick={{fontSize: 12, fill: '#d4d4d8'}} tickLine={false} axisLine={false} />
-                    <YAxis tick={{fontSize: 12, fill: '#a1a1aa'}} tickLine={false} axisLine={false} unit="d" />
+                    <XAxis dataKey="department" tick={{ fontSize: 12, fill: '#d4d4d8' }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: '#a1a1aa' }} tickLine={false} axisLine={false} unit="d" />
                     <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} formatter={(val) => [`${val} Days`, 'Avg Turnaround']} />
                     <Bar dataKey="avgDays" name="Avg Turnaround (Days)" fill="url(#turnGrad)" radius={[6, 6, 0, 0]} maxBarSize={50}>
                         <LabelList dataKey="avgDays" position="top" fill="#14b8a6" fontSize={11} fontWeight={600} formatter={(v) => `${v}d`} />
@@ -976,11 +1039,11 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
 
 
             {/* INLINE FILTERS & TOGGLE */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', minHeight: '32px' }}>
-                
-                <div style={{ 
-                    display: 'flex', 
-                    gap: '12px', 
+            <div className="analytics-filter-bar" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', minHeight: '32px' }}>
+
+                <div className="analytics-filter-inputs" style={{
+                    display: 'flex',
+                    gap: '12px',
                     alignItems: 'center',
                     overflow: 'hidden',
                     transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -1000,11 +1063,11 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                     <div style={{ width: '155px' }}>
                         <SearchSelect options={timeOptions} value={filterTime} onChange={setFilterTime} placeholder="Date Range" />
                     </div>
-                    <button 
-                        className="btn" 
-                        onClick={() => { setFilterDept(''); setFilterLocation(''); setFilterStatus(''); setFilterTime(''); }} 
-                        style={{ 
-                            backgroundColor: 'transparent', border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', 
+                    <button
+                        className="btn"
+                        onClick={() => { setFilterDept(''); setFilterLocation(''); setFilterStatus(''); setFilterTime(''); }}
+                        style={{
+                            backgroundColor: 'transparent', border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444',
                             padding: '6px 12px', fontSize: '11px', borderRadius: '6px', cursor: 'pointer',
                             display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap',
                             transition: 'all 0.2s ease'
@@ -1014,10 +1077,10 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                     </button>
                 </div>
 
-                <button 
-                    className="btn" 
+                <button
+                    className="btn"
                     onClick={() => setShowFilters(!showFilters)}
-                    style={{ 
+                    style={{
                         padding: '6px 14px', fontSize: '11px', fontWeight: 600,
                         display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
                         backgroundColor: showFilters ? 'rgba(99,102,241,0.15)' : 'transparent',
@@ -1030,14 +1093,14 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                     <Filter size={12} /> {showFilters ? 'Hide Filters' : 'Filter Analytics'}
                 </button>
 
-                <button 
-                    className="btn" 
+                <button
+                    className="btn"
                     onClick={() => exportExecutivePDF(filteredTickets, { dept: filterDept, time: filterTime })}
-                    style={{ 
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', 
-                        border: '1px solid rgba(239, 68, 68, 0.25)', 
-                        padding: '6px 14px', fontSize: '11px', fontWeight: 600, 
-                        display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', 
+                    style={{
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444',
+                        border: '1px solid rgba(239, 68, 68, 0.25)',
+                        padding: '6px 14px', fontSize: '11px', fontWeight: 600,
+                        display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
                         borderRadius: '6px', cursor: 'pointer', transition: 'all 0.2s ease'
                     }}
                     title="Export Executive PDF Summary Report"
@@ -1045,14 +1108,14 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                     <FileText size={12} /> PDF Report
                 </button>
 
-                <button 
-                    className="btn" 
+                <button
+                    className="btn"
                     onClick={() => exportExecutiveCSV(filteredTickets, { dept: filterDept, time: filterTime })}
-                    style={{ 
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981', 
-                        border: '1px solid rgba(16, 185, 129, 0.25)', 
-                        padding: '6px 14px', fontSize: '11px', fontWeight: 600, 
-                        display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', 
+                    style={{
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981',
+                        border: '1px solid rgba(16, 185, 129, 0.25)',
+                        padding: '6px 14px', fontSize: '11px', fontWeight: 600,
+                        display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap',
                         borderRadius: '6px', cursor: 'pointer', transition: 'all 0.2s ease'
                     }}
                     title="Export Executive CSV Report"
@@ -1063,11 +1126,11 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
 
             {/* TREND SPARKLINE ROW */}
             {dateTrend.length > 1 && (
-                <ChartCard 
-                    onClick={() => openEnlargedChart('dateTrend')} 
-                    title="Ticket Volume Trend" 
+                <ChartCard
+                    onClick={() => openEnlargedChart('dateTrend')}
+                    title="Ticket Volume Trend"
                     subtitle={`${dateTrend.length} data points`}
-                    icon={TrendingUp} 
+                    icon={TrendingUp}
                     accentColor="#6366f1"
                     flex="none"
                     minWidth="auto"
@@ -1078,13 +1141,13 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                             <AreaChart data={dateTrend} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02}/>
+                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.04)" />
-                                <XAxis dataKey="date" tick={{fontSize: 9, fill: '#71717a'}} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                                <YAxis tick={{fontSize: 9, fill: '#71717a'}} tickLine={false} axisLine={false} allowDecimals={false} />
+                                <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#71717a' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                                <YAxis tick={{ fontSize: 9, fill: '#71717a' }} tickLine={false} axisLine={false} allowDecimals={false} />
                                 <Tooltip cursor={{ stroke: '#6366f1', strokeWidth: 1, strokeDasharray: '4 4' }} content={<CustomTooltip />} />
                                 <Area type="monotone" dataKey="tickets" stroke="#818cf8" strokeWidth={2} fillOpacity={1} fill="url(#sparkGrad)" name="Tickets" dot={false} activeDot={{ r: 4, fill: '#818cf8', stroke: '#6366f1', strokeWidth: 2 }} />
                             </AreaChart>
@@ -1094,34 +1157,35 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
             )}
 
             {/* MAIN CHARTS ROW */}
-            <div style={{ display: 'flex', gap: '14px', flex: 1, minHeight: '340px', overflowX: 'auto', paddingBottom: '4px' }}>
-                
+            <div className="analytics-charts-row" style={{ display: 'flex', gap: '14px', flex: 1, minHeight: '360px', overflowX: 'auto', paddingBottom: '4px' }}>
+
                 {/* 1. Ticket Count by User */}
-                <ChartCard 
-                    onClick={() => openEnlargedChart('userStats')} 
-                    title="Ticket Count by User" 
+                <ChartCard
+                    onClick={() => openEnlargedChart('userStats')}
+                    title="Ticket Count by User"
                     subtitle={`${userStats.length} users`}
-                    icon={Users} 
+                    icon={Users}
                     accentColor="#6366f1"
                     flex={userStats.length > 5 ? 2.25 : 1.25}
                     minWidth="330px"
+                    style={{ height: '360px', minHeight: '360px' }}
                 >
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div style={{ flex: 1, minHeight: '260px', height: '280px', position: 'relative' }}>
+                        <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                             <ComposedChart data={userStats} margin={{ top: 20, right: 10, left: -10 }} barCategoryGap="18%">
                                 <defs>
                                     <linearGradient id="ugr1" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#6366f1" stopOpacity={1}/>
-                                        <stop offset="100%" stopColor="#4f46e5" stopOpacity={0.75}/>
+                                        <stop offset="0%" stopColor="#6366f1" stopOpacity={1} />
+                                        <stop offset="100%" stopColor="#4f46e5" stopOpacity={0.75} />
                                     </linearGradient>
                                     <linearGradient id="ugr2" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={1}/>
-                                        <stop offset="100%" stopColor="#d97706" stopOpacity={0.75}/>
+                                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={1} />
+                                        <stop offset="100%" stopColor="#d97706" stopOpacity={0.75} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} horizontal={true} stroke="rgba(255,255,255,0.04)" />
-                                <XAxis dataKey="user" tick={{fontSize: 9, fill: '#a1a1aa'}} tickLine={false} axisLine={false} angle={-35} textAnchor="end" height={55} />
-                                <YAxis width={35} domain={[0, dataMax => dataMax === 0 ? 4 : dataMax + 2]} tickCount={getTickCount(maxUserTotal)} tick={{fontSize: 10, fill: '#71717a'}} tickLine={false} axisLine={false} allowDecimals={false} />
+                                <XAxis dataKey="user" tick={{ fontSize: 9, fill: '#a1a1aa' }} tickLine={false} axisLine={false} angle={-35} textAnchor="end" height={55} />
+                                <YAxis width={35} domain={[0, maxUserTotal <= 0 ? 4 : maxUserTotal + 2]} tickCount={getTickCount(maxUserTotal)} tick={{ fontSize: 10, fill: '#71717a' }} tickLine={false} axisLine={false} allowDecimals={false} />
                                 <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} content={<CustomTooltip />} />
                                 <Legend content={<CustomLegend />} />
                                 <Bar dataKey="Raised" stackId="a" fill="url(#ugr1)" maxBarSize={36} />
@@ -1134,30 +1198,31 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                     </div>
                 </ChartCard>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 2, minWidth: '380px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 2, minWidth: '380px', height: '360px' }}>
                     {/* 2. Ticket Volume by Dept */}
-                    <ChartCard 
-                        onClick={() => openEnlargedChart('deptStats')} 
-                        title="Volume by Department" 
-                        icon={BarChart3} 
+                    <ChartCard
+                        onClick={() => openEnlargedChart('deptStats')}
+                        title="Volume by Department"
+                        icon={BarChart3}
                         accentColor="#f59e0b"
                         flex={1}
                         minWidth="auto"
+                        style={{ height: 'calc(50% - 7px)', minHeight: '170px' }}
                     >
-                        <div style={{ flex: 1, minHeight: 0 }}>
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div style={{ flex: 1, minHeight: '110px', height: '100%', position: 'relative' }}>
+                            <ResponsiveContainer width="100%" height="100%" minHeight={100}>
                                 <BarChart data={deptStats} layout="vertical" margin={{ left: 15, right: 30 }} barCategoryGap="18%">
                                     <defs>
                                         {GRADIENT_PAIRS.map((pair, i) => (
                                             <linearGradient key={`dg-${i}`} id={`deptGrad${i}`} x1="0" y1="0" x2="1" y2="0">
-                                                <stop offset="0%" stopColor={pair.start} stopOpacity={0.85}/>
-                                                <stop offset="100%" stopColor={pair.end} stopOpacity={1}/>
+                                                <stop offset="0%" stopColor={pair.start} stopOpacity={0.85} />
+                                                <stop offset="100%" stopColor={pair.end} stopOpacity={1} />
                                             </linearGradient>
                                         ))}
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={false} stroke="rgba(255,255,255,0.04)" />
-                                    <XAxis type="number" domain={[0, dataMax => dataMax === 0 ? 4 : dataMax + 2]} tickCount={getTickCount(maxDeptTotal)} tick={{fontSize: 9, fill: '#71717a'}} tickLine={false} axisLine={false} allowDecimals={false} />
-                                    <YAxis type="category" dataKey="department" tick={{fontSize: 9, fill: '#a1a1aa'}} tickLine={false} axisLine={false} width={80} />
+                                    <XAxis type="number" domain={[0, maxDeptTotal <= 0 ? 4 : maxDeptTotal + 2]} tickCount={getTickCount(maxDeptTotal)} tick={{ fontSize: 9, fill: '#71717a' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                                    <YAxis type="category" dataKey="department" tick={{ fontSize: 9, fill: '#a1a1aa' }} tickLine={false} axisLine={false} width={80} />
                                     <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} content={<CustomTooltip />} allowEscapeViewBox={{ x: true, y: true }} position={{ y: 0 }} wrapperStyle={{ zIndex: 1000, pointerEvents: 'none' }} />
                                     <Bar dataKey="total" radius={[0, 5, 5, 0]} maxBarSize={28} animationDuration={600}>
                                         <LabelList dataKey="total" position="insideRight" fill="#fff" fontSize={9} fontWeight={600} />
@@ -1171,29 +1236,30 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                     </ChartCard>
 
                     {/* 3. Ticket Volume by Location */}
-                    <ChartCard 
-                        onClick={() => openEnlargedChart('locationLoad')} 
-                        title="Volume by Location" 
+                    <ChartCard
+                        onClick={() => openEnlargedChart('locationLoad')}
+                        title="Volume by Location"
                         subtitle="Top 10"
-                        icon={MapPin} 
+                        icon={MapPin}
                         accentColor="#10b981"
                         flex={1}
                         minWidth="auto"
+                        style={{ height: 'calc(50% - 7px)', minHeight: '170px' }}
                     >
-                        <div style={{ flex: 1, minHeight: 0 }}>
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div style={{ flex: 1, minHeight: '110px', height: '100%', position: 'relative' }}>
+                            <ResponsiveContainer width="100%" height="100%" minHeight={100}>
                                 <BarChart data={locationLoad} layout="vertical" margin={{ left: 15, right: 30 }} barCategoryGap="18%">
                                     <defs>
                                         {GRADIENT_PAIRS.map((pair, i) => (
                                             <linearGradient key={`lg-${i}`} id={`locGrad${i}`} x1="0" y1="0" x2="1" y2="0">
-                                                <stop offset="0%" stopColor={pair.start} stopOpacity={0.85}/>
-                                                <stop offset="100%" stopColor={pair.end} stopOpacity={1}/>
+                                                <stop offset="0%" stopColor={pair.start} stopOpacity={0.85} />
+                                                <stop offset="100%" stopColor={pair.end} stopOpacity={1} />
                                             </linearGradient>
                                         ))}
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={false} stroke="rgba(255,255,255,0.04)" />
-                                    <XAxis type="number" domain={[0, dataMax => dataMax === 0 ? 4 : dataMax + 2]} tickCount={getTickCount(maxLocTotal)} tick={{fontSize: 9, fill: '#71717a'}} tickLine={false} axisLine={false} allowDecimals={false} />
-                                    <YAxis type="category" dataKey="location" tick={{fontSize: 9, fill: '#a1a1aa'}} tickLine={false} axisLine={false} width={80} />
+                                    <XAxis type="number" domain={[0, maxLocTotal <= 0 ? 4 : maxLocTotal + 2]} tickCount={getTickCount(maxLocTotal)} tick={{ fontSize: 9, fill: '#71717a' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                                    <YAxis type="category" dataKey="location" tick={{ fontSize: 9, fill: '#a1a1aa' }} tickLine={false} axisLine={false} width={80} />
                                     <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} content={<CustomTooltip />} allowEscapeViewBox={{ x: true, y: true }} position={{ y: 0 }} wrapperStyle={{ zIndex: 1000, pointerEvents: 'none' }} />
                                     <Bar dataKey="tickets" radius={[0, 5, 5, 0]} maxBarSize={28} animationDuration={600}>
                                         <LabelList dataKey="tickets" position="insideRight" fill="#fff" fontSize={9} fontWeight={600} />
@@ -1208,24 +1274,25 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                 </div>
 
                 {/* 4. Status Distribution Donut */}
-                <ChartCard 
-                    onClick={() => openEnlargedChart('globalPie')} 
-                    title="Status Distribution" 
-                    icon={CheckCircle} 
+                <ChartCard
+                    onClick={() => openEnlargedChart('globalPie')}
+                    title="Status Distribution"
+                    icon={CheckCircle}
                     accentColor="#8b5cf6"
                     flex={0.8}
                     minWidth="240px"
+                    style={{ height: '360px', minHeight: '360px' }}
                 >
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div style={{ flex: 1, minHeight: '260px', height: '280px', position: 'relative' }}>
+                        <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                             <PieChart>
-                                <Pie 
-                                    data={statusBreakdown} 
+                                <Pie
+                                    data={statusBreakdown}
                                     cx="50%"
                                     cy="45%"
-                                    innerRadius="55%" 
-                                    outerRadius="85%" 
-                                    paddingAngle={3} 
+                                    innerRadius="55%"
+                                    outerRadius="85%"
+                                    paddingAngle={3}
                                     dataKey="value"
                                     animationDuration={800}
                                     stroke="rgba(0,0,0,0.2)"
@@ -1246,24 +1313,25 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
             </div>
 
             {/* SECONDARY ELABORATE CHARTS ROW */}
-            <div style={{ display: 'flex', gap: '14px', flex: 1, minHeight: '320px', overflowX: 'auto', paddingBottom: '4px' }}>
-                
+            <div className="analytics-charts-row" style={{ display: 'flex', gap: '14px', flex: 1, minHeight: '340px', overflowX: 'auto', paddingBottom: '4px' }}>
+
                 {/* 5. Top Issue Categories */}
-                <ChartCard 
-                    onClick={() => openEnlargedChart('categoryStats')} 
-                    title="Top Issue Categories" 
+                <ChartCard
+                    onClick={() => openEnlargedChart('categoryStats')}
+                    title="Top Issue Categories"
                     subtitle="Most frequent issues"
-                    icon={Tag} 
+                    icon={Tag}
                     accentColor="#0ea5e9"
                     flex={1.2}
                     minWidth="300px"
+                    style={{ height: '340px', minHeight: '340px' }}
                 >
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div style={{ flex: 1, minHeight: '240px', height: '260px', position: 'relative' }}>
+                        <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                             <BarChart data={categoryStats} layout="vertical" margin={{ left: 10, right: 25 }} barCategoryGap="16%">
                                 <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={false} stroke="rgba(255,255,255,0.04)" />
-                                <XAxis type="number" domain={[0, dataMax => dataMax === 0 ? 4 : dataMax + 2]} tick={{fontSize: 9, fill: '#71717a'}} tickLine={false} axisLine={false} allowDecimals={false} />
-                                <YAxis type="category" dataKey="category" tick={{fontSize: 9, fill: '#a1a1aa'}} tickLine={false} axisLine={false} width={100} />
+                                <XAxis type="number" domain={[0, maxCatTotal <= 0 ? 4 : maxCatTotal + 2]} tick={{ fontSize: 9, fill: '#71717a' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                                <YAxis type="category" dataKey="category" tick={{ fontSize: 9, fill: '#a1a1aa' }} tickLine={false} axisLine={false} width={100} />
                                 <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} content={<CustomTooltip />} />
                                 <Bar dataKey="tickets" radius={[0, 4, 4, 0]} maxBarSize={22} fill="#0ea5e9">
                                     <LabelList dataKey="tickets" position="insideRight" fill="#fff" fontSize={9} fontWeight={600} />
@@ -1277,21 +1345,22 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                 </ChartCard>
 
                 {/* 6. SLA Compliance by Department */}
-                <ChartCard 
-                    onClick={() => openEnlargedChart('slaDeptStats')} 
-                    title="SLA Compliance by Department" 
+                <ChartCard
+                    onClick={() => openEnlargedChart('slaDeptStats')}
+                    title="SLA Compliance by Department"
                     subtitle="Compliant vs Breached"
-                    icon={ShieldAlert} 
+                    icon={ShieldAlert}
                     accentColor="#10b981"
                     flex={1.4}
                     minWidth="320px"
+                    style={{ height: '340px', minHeight: '340px' }}
                 >
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div style={{ flex: 1, minHeight: '240px', height: '260px', position: 'relative' }}>
+                        <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                             <BarChart data={slaDeptStats} margin={{ top: 15, right: 10, left: -15 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.04)" />
-                                <XAxis dataKey="department" tick={{fontSize: 9, fill: '#a1a1aa'}} tickLine={false} axisLine={false} />
-                                <YAxis tick={{fontSize: 9, fill: '#71717a'}} tickLine={false} axisLine={false} allowDecimals={false} />
+                                <XAxis dataKey="department" tick={{ fontSize: 9, fill: '#a1a1aa' }} tickLine={false} axisLine={false} />
+                                <YAxis tick={{ fontSize: 9, fill: '#71717a' }} tickLine={false} axisLine={false} allowDecimals={false} />
                                 <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} content={<CustomTooltip />} />
                                 <Legend content={<CustomLegend />} />
                                 <Bar dataKey="compliant" name="Within SLA" stackId="a" fill="#10b981" maxBarSize={30} />
@@ -1302,28 +1371,29 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                 </ChartCard>
 
                 {/* 7. Escalation Distribution Donut */}
-                <ChartCard 
-                    onClick={() => openEnlargedChart('escalationStats')} 
-                    title="Escalation Levels" 
+                <ChartCard
+                    onClick={() => openEnlargedChart('escalationStats')}
+                    title="Escalation Levels"
                     subtitle="L1 through L5 tiers"
-                    icon={Layers} 
+                    icon={Layers}
                     accentColor="#f97316"
                     flex={0.8}
                     minWidth="230px"
+                    style={{ height: '340px', minHeight: '340px' }}
                 >
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div style={{ flex: 1, minHeight: '240px', height: '260px', position: 'relative' }}>
+                        <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                             <PieChart>
-                                <Pie 
-                                    data={escalationStats} 
-                                    cx="50%" 
+                                <Pie
+                                    data={escalationStats}
+                                    cx="50%"
                                     cy="45%"
-                                    innerRadius="50%" 
-                                    outerRadius="80%" 
-                                    paddingAngle={3} 
-                                    dataKey="value" 
+                                    innerRadius="50%"
+                                    outerRadius="80%"
+                                    paddingAngle={3}
+                                    dataKey="value"
                                     animationDuration={800}
-                                    stroke="rgba(0,0,0,0.2)" 
+                                    stroke="rgba(0,0,0,0.2)"
                                     strokeWidth={1}
                                 >
                                     {escalationStats.map((entry, index) => {
@@ -1340,27 +1410,28 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                 </ChartCard>
 
                 {/* 8. Avg Resolution Turnaround by Dept */}
-                <ChartCard 
-                    onClick={() => openEnlargedChart('turnaroundStats')} 
-                    title="Avg Turnaround (Days)" 
+                <ChartCard
+                    onClick={() => openEnlargedChart('turnaroundStats')}
+                    title="Avg Turnaround (Days)"
                     subtitle="Dept resolution speed"
-                    icon={Clock} 
+                    icon={Clock}
                     accentColor="#14b8a6"
                     flex={1.1}
                     minWidth="280px"
+                    style={{ height: '340px', minHeight: '340px' }}
                 >
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div style={{ flex: 1, minHeight: '240px', height: '260px', position: 'relative' }}>
+                        <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                             <BarChart data={turnaroundStats} margin={{ top: 20, right: 10, left: -15 }}>
                                 <defs>
                                     <linearGradient id="turnSmallGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#14b8a6" stopOpacity={1}/>
-                                        <stop offset="100%" stopColor="#0d9488" stopOpacity={0.7}/>
+                                        <stop offset="0%" stopColor="#14b8a6" stopOpacity={1} />
+                                        <stop offset="100%" stopColor="#0d9488" stopOpacity={0.7} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.04)" />
-                                <XAxis dataKey="department" tick={{fontSize: 9, fill: '#a1a1aa'}} tickLine={false} axisLine={false} />
-                                <YAxis tick={{fontSize: 9, fill: '#71717a'}} tickLine={false} axisLine={false} unit="d" />
+                                <XAxis dataKey="department" tick={{ fontSize: 9, fill: '#a1a1aa' }} tickLine={false} axisLine={false} />
+                                <YAxis tick={{ fontSize: 9, fill: '#71717a' }} tickLine={false} axisLine={false} unit="d" />
                                 <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} formatter={(val) => [`${val} Days`, 'Avg Turnaround']} />
                                 <Bar dataKey="avgDays" name="Avg Turnaround" fill="url(#turnSmallGrad)" radius={[4, 4, 0, 0]} maxBarSize={28}>
                                     <LabelList dataKey="avgDays" position="top" fill="#14b8a6" fontSize={9} fontWeight={600} formatter={(v) => `${v}d`} />
@@ -1374,60 +1445,60 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
 
             {/* ENLARGED CHART MODAL */}
             {enlargedChart && (
-                <div 
+                <div
                     className="glass-overlay"
-                    style={{ 
-                        position: 'fixed', inset: 0, 
-                        zIndex: 9999, 
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                    style={{
+                        position: 'fixed', inset: 0,
+                        zIndex: 9999,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
                         padding: '24px',
                         animation: 'fadeIn 0.2s ease-out'
-                    }} 
+                    }}
                     onClick={() => setEnlargedChart(null)}
                 >
-                    <div 
+                    <div
                         className="glass-modal"
-                        style={{ 
-                            width: '90vw', height: '85vh', maxWidth: '1100px', 
+                        style={{
+                            width: '90vw', height: '85vh', maxWidth: '1100px',
                             padding: '24px 32px', borderRadius: '16px',
                             display: 'flex', flexDirection: 'column', position: 'relative',
                             overflow: 'hidden'
-                        }} 
+                        }}
                         onClick={e => e.stopPropagation()}
                     >
-                        <button 
-                            onClick={() => setEnlargedChart(null)} 
-                            style={{ 
-                                position: 'absolute', top: '16px', right: '16px', 
-                                background: 'transparent', 
-                                border: '1px solid var(--border)', 
-                                color: 'var(--text-main)', cursor: 'pointer', padding: '6px', 
+                        <button
+                            onClick={() => setEnlargedChart(null)}
+                            style={{
+                                position: 'absolute', top: '16px', right: '16px',
+                                background: 'transparent',
+                                border: '1px solid var(--border)',
+                                color: 'var(--text-main)', cursor: 'pointer', padding: '6px',
                                 borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 transition: 'all 0.2s ease'
                             }}
                         >
                             <X size={18} />
                         </button>
-                        
-                        <h3 style={{ 
-                            margin: '0 0 4px 0', fontSize: '18px', fontWeight: 700, 
-                            color: 'var(--text-main)', textAlign: 'center', letterSpacing: '-0.01em' 
+
+                        <h3 style={{
+                            margin: '0 0 4px 0', fontSize: '18px', fontWeight: 700,
+                            color: 'var(--text-main)', textAlign: 'center', letterSpacing: '-0.01em'
                         }}>
                             {enlargedChart === 'deptStats' ? 'Ticket Volume by Department' :
-                             enlargedChart === 'dateTrend' ? 'Historical Ticket Volume Trend' :
-                             enlargedChart === 'userStats' ? 'Ticket Count by User' :
-                             enlargedChart === 'statusBreakdown' ? 'Department Status Breakdown (100%)' :
-                             enlargedChart === 'locationLoad' ? 'Ticket Volume by Location (Top 10)' :
-                             enlargedChart === 'categoryStats' ? 'Top Issue Categories' :
-                             enlargedChart === 'slaDeptStats' ? 'SLA Compliance by Department' :
-                             enlargedChart === 'escalationStats' ? 'Escalation Level Distribution' :
-                             enlargedChart === 'turnaroundStats' ? 'Average Resolution Turnaround Time (Days)' :
-                             'Global Status Distribution'}
+                                enlargedChart === 'dateTrend' ? 'Historical Ticket Volume Trend' :
+                                    enlargedChart === 'userStats' ? 'Ticket Count by User' :
+                                        enlargedChart === 'statusBreakdown' ? 'Department Status Breakdown (100%)' :
+                                            enlargedChart === 'locationLoad' ? 'Ticket Volume by Location (Top 10)' :
+                                                enlargedChart === 'categoryStats' ? 'Top Issue Categories' :
+                                                    enlargedChart === 'slaDeptStats' ? 'SLA Compliance by Department' :
+                                                        enlargedChart === 'escalationStats' ? 'Escalation Level Distribution' :
+                                                            enlargedChart === 'turnaroundStats' ? 'Average Resolution Turnaround Time (Days)' :
+                                                                'Global Status Distribution'}
                         </h3>
                         <p style={{ textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 16px 0' }}>
                             {localFilteredTickets.length} tickets • Click anywhere outside to close
                         </p>
-                        
+
                         {/* LOCAL FILTERS FOR ENLARGED CHART */}
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
                             <div style={{ width: '155px' }}>
@@ -1442,25 +1513,25 @@ const AdminAnalytics = ({ tickets = [], usersList = [] }) => {
                             <div style={{ width: '140px' }}>
                                 <SearchSelect options={timeOptions} value={localFilterTime} onChange={setLocalFilterTime} placeholder="Date Range" />
                             </div>
-                            <button 
-                                className="btn" 
+                            <button
+                                className="btn"
                                 onClick={() => {
                                     setLocalFilterDept('');
                                     setLocalFilterLocation('');
                                     setLocalFilterStatus('');
                                     setLocalFilterTime('');
-                                }} 
-                                style={{ 
-                                    backgroundColor: 'transparent', border: '1px solid rgba(239,68,68,0.4)', 
-                                    color: '#ef4444', padding: '6px 12px', fontSize: '11px', 
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                                }}
+                                style={{
+                                    backgroundColor: 'transparent', border: '1px solid rgba(239,68,68,0.4)',
+                                    color: '#ef4444', padding: '6px 12px', fontSize: '11px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     gap: '4px', whiteSpace: 'nowrap', borderRadius: '6px', cursor: 'pointer'
                                 }}
                             >
                                 <XCircle size={12} /> Clear Filters
                             </button>
                         </div>
-                        
+
                         <div style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center' }}>
                             <div style={{ width: '100%', maxWidth: '1000px', height: '100%' }}>
                                 <ResponsiveContainer width="100%" height="100%">

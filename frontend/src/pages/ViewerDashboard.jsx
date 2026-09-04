@@ -171,7 +171,7 @@ const ViewerDashboard = ({ user, setUser }) => {
                         return (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd';
                     }
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
         return '0d';
     };
@@ -539,14 +539,14 @@ const ViewerDashboard = ({ user, setUser }) => {
                     </div>
                     {activeTab !== 'analytics' && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <button 
-                                className="btn p-2 text-xs flex-row gap-1" 
-                                onClick={() => setShowKPIs(prev => !prev)} 
+                            <button
+                                className="btn p-2 text-xs flex-row gap-1"
+                                onClick={() => setShowKPIs(prev => !prev)}
                                 title={showKPIs ? "Hide KPI Cards" : "Show KPI Cards"}
-                                style={{ 
-                                    whiteSpace: 'nowrap', 
-                                    borderRadius: '6px', 
-                                    backgroundColor: 'var(--bg-card, #131b2e)', 
+                                style={{
+                                    whiteSpace: 'nowrap',
+                                    borderRadius: '6px',
+                                    backgroundColor: 'var(--bg-card, #131b2e)',
                                     border: '1px solid var(--border, #1e293b)',
                                     color: 'var(--text-main, #f1f5f9)',
                                     fontSize: '11px',
@@ -620,9 +620,9 @@ const ViewerDashboard = ({ user, setUser }) => {
 
                 {activeTab === 'ageing' && !loading && (
                     <div className="card" style={isAgeingExpanded ? { position: 'fixed', inset: '16px', zIndex: 1000, backgroundColor: 'var(--bg-main, #0f172a)', margin: 0, padding: '20px', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' } : { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-                        <div className="flex-row justify-between mb-4 gap-3">
+                        <div className="ageing-controls-bar flex-row justify-between mb-4 gap-3">
                             <h3 className="m-0 text-lg" style={{ whiteSpace: 'nowrap' }}>⏳ Full Ticket Ageing Analytics</h3>
-                            <div className="flex-row justify-end gap-2 flex-1" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                            <div className="ageing-controls-group flex-row justify-end gap-2 flex-1" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
                                 <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                                     <select
                                         className="form-control"
@@ -739,7 +739,7 @@ const ViewerDashboard = ({ user, setUser }) => {
                                                         </td>
                                                         <td style={{ padding: '12px 8px' }}><span style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>{a.escalation_level || 'L1'}</span></td>
                                                         <td style={{ padding: '12px 8px' }}>{a.severity || '-'}</td>
-                                                            <td style={{ padding: '12px 8px' }}>{a.status}</td>
+                                                        <td style={{ padding: '12px 8px' }}>{a.status}</td>
                                                         <td style={{ padding: '12px 8px' }} className="text-muted">{formatSolverDetails(a.assigned_by)}</td>
                                                         <td style={{ padding: '12px 8px' }} className="text-primary">{formatSolverDetails(a.assigned_to)}</td>
                                                         <td style={{ padding: '12px 8px' }} className="font-bold">{a.ticket_age_hours ? `${(a.ticket_age_hours / 24).toFixed(1)}d` : '-'}</td>
@@ -778,7 +778,7 @@ const ViewerDashboard = ({ user, setUser }) => {
                 const isExit = isClosing;
                 const currentTicket = selectedTicket || panelTicket;
                 return (
-                    <div style={{
+                    <div className="ticket-details-panel slide-in-right-panel" style={{
                         position: 'fixed',
                         top: isSidePanelExpanded ? '2vh' : '52px',
                         bottom: isSidePanelExpanded ? '2vh' : '0',
@@ -792,8 +792,8 @@ const ViewerDashboard = ({ user, setUser }) => {
                         transition: 'top 0.9s cubic-bezier(0.4, 0, 0.2, 1), right 0.9s cubic-bezier(0.4, 0, 0.2, 1), width 0.9s cubic-bezier(0.4, 0, 0.2, 1), bottom 0.9s cubic-bezier(0.4, 0, 0.2, 1), border-radius 0.9s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.9s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}>
                         <div style={{ padding: '24px 24px 0 24px', zIndex: 10, borderBottom: '1px solid var(--border, #cbd5e1)', background: 'transparent', borderRadius: isSidePanelExpanded ? '12px 12px 0 0' : 0 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div className="side-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <div className="side-panel-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                     <h3 style={{ margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         #{currentTicket.ticket_id}
                                         <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>{currentTicket.status}</span>
@@ -1006,7 +1006,7 @@ const ViewerDashboard = ({ user, setUser }) => {
                     </div>
                 );
             })()}
-        
+
             {showAdvancedSearchModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '125vw', height: '125vh', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <div style={{ backgroundColor: 'var(--bg-card)', padding: '24px', borderRadius: '12px', width: '90%', maxWidth: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', border: '1px solid var(--border)' }}>
@@ -1017,46 +1017,46 @@ const ViewerDashboard = ({ user, setUser }) => {
                         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             <div>
                                 <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Search Keyword</label>
-                                <input type="text" className="form-control" style={{ fontSize: '12px', padding: '8px' }} placeholder="Filter by ID, Dept, Status..." value={tempFilters.search} onChange={e => setTempFilters({...tempFilters, search: e.target.value})} />
+                                <input type="text" className="form-control" style={{ fontSize: '12px', padding: '8px' }} placeholder="Filter by ID, Dept, Status..." value={tempFilters.search} onChange={e => setTempFilters({ ...tempFilters, search: e.target.value })} />
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                                 <div>
                                     <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Department</label>
-                                    <select className="form-control" style={{ fontSize: '12px', padding: '8px' }} value={tempFilters.dept} onChange={e => setTempFilters({...tempFilters, dept: e.target.value})}>
+                                    <select className="form-control" style={{ fontSize: '12px', padding: '8px' }} value={tempFilters.dept} onChange={e => setTempFilters({ ...tempFilters, dept: e.target.value })}>
                                         <option value="">All Depts</option>
                                         {[...new Set(ageingData.map(a => a.dept_assigned).filter(Boolean))].sort().map(d => <option key={d} value={d}>{d}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Status</label>
-                                    <select className="form-control" style={{ fontSize: '12px', padding: '8px' }} value={tempFilters.status} onChange={e => setTempFilters({...tempFilters, status: e.target.value})}>
+                                    <select className="form-control" style={{ fontSize: '12px', padding: '8px' }} value={tempFilters.status} onChange={e => setTempFilters({ ...tempFilters, status: e.target.value })}>
                                         <option value="">All Statuses</option>
                                         {[...new Set(ageingData.map(a => a.status).filter(Boolean))].sort().map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Location</label>
-                                    <select className="form-control" style={{ fontSize: '12px', padding: '8px' }} value={tempFilters.location} onChange={e => setTempFilters({...tempFilters, location: e.target.value})}>
+                                    <select className="form-control" style={{ fontSize: '12px', padding: '8px' }} value={tempFilters.location} onChange={e => setTempFilters({ ...tempFilters, location: e.target.value })}>
                                         <option value="">All Locations</option>
                                         {[...new Set(ageingData.map(a => a.location).filter(Boolean))].sort().map(l => <option key={l} value={l}>{l}</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Issue Category</label>
-                                    <select className="form-control" style={{ fontSize: '12px', padding: '8px' }} value={tempFilters.issueCat} onChange={e => setTempFilters({...tempFilters, issueCat: e.target.value})}>
+                                    <select className="form-control" style={{ fontSize: '12px', padding: '8px' }} value={tempFilters.issueCat} onChange={e => setTempFilters({ ...tempFilters, issueCat: e.target.value })}>
                                         <option value="">All Issue Cats</option>
                                         {[...new Set(ageingData.map(a => a.issue_category).filter(Boolean))].sort().map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
                                 </div>
                                 <div style={{ gridColumn: '1 / -1' }}>
                                     <label style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Escalation Level</label>
-                                    <select className="form-control" style={{ fontSize: '12px', padding: '8px' }} value={tempFilters.level} onChange={e => setTempFilters({...tempFilters, level: e.target.value})}>
+                                    <select className="form-control" style={{ fontSize: '12px', padding: '8px' }} value={tempFilters.level} onChange={e => setTempFilters({ ...tempFilters, level: e.target.value })}>
                                         <option value="">All Levels</option>
                                         {[...new Set(ageingData.map(a => a.escalation_level).filter(Boolean))].sort().map(l => <option key={l} value={l}>{l}</option>)}
                                     </select>
                                 </div>
                             </div>
-                            
+
                             <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
                                 <button className="btn badge-primary" style={{ flex: 1, justifyContent: 'center', padding: '10px' }} onClick={() => {
                                     setAgeingSearch(tempFilters.search);
