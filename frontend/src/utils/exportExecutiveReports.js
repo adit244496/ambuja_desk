@@ -1,3 +1,58 @@
+import { parseDateString, getISTDate, getISTTimestamp, formatISTDate } from './dateUtils';
+
+const isTicketBreached = (t) => {
+    if (!t) return false;
+    if (t.solver_delay_hours !== undefined && t.solver_delay_hours !== null && Number(t.solver_delay_hours) > 0) return true;
+    if (!t.deadline || String(t.deadline).toLowerCase() === 'nan') return false;
+
+    const deadlineDate = parseDateString(t.deadline);
+    if (!deadlineDate) return false;
+
+    const st = String(t.status || '').toLowerCase();
+    const ct = String(t.closure_type || '').toLowerCase();
+    const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+
+    if (isFinished) {
+        const finishStr = t.solved_timestamp || t.closed_timestamp;
+        if (finishStr && String(finishStr).toLowerCase() !== 'nan') {
+            const finishDate = parseDateString(finishStr);
+            if (finishDate) return finishDate > deadlineDate;
+        }
+        return t.SLA_Breach === true || t.SLA_Breach === 'True';
+    }
+
+    return getISTDate() > deadlineDate;
+};
+
+const getTicketDelayHours = (t) => {
+    if (!t) return 0;
+    if (t.solver_delay_hours !== undefined && t.solver_delay_hours !== null && Number(t.solver_delay_hours) > 0) {
+        return Number(t.solver_delay_hours);
+    }
+    if (!t.deadline || String(t.deadline).toLowerCase() === 'nan') return 0;
+    const deadlineDate = parseDateString(t.deadline);
+    if (!deadlineDate) return 0;
+
+    const st = String(t.status || '').toLowerCase();
+    const ct = String(t.closure_type || '').toLowerCase();
+    const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+
+    if (isFinished) {
+        const finishStr = t.closed_timestamp || t.solved_timestamp;
+        if (finishStr && String(finishStr).toLowerCase() !== 'nan') {
+            const finishDate = parseDateString(finishStr);
+            if (finishDate) {
+                const diffMs = finishDate.getTime() - deadlineDate.getTime();
+                return diffMs > 0 ? (diffMs / (1000 * 3600)) : 0;
+            }
+        }
+        return 0;
+    } else {
+        const diffMs = getISTDate().getTime() - deadlineDate.getTime();
+        return diffMs > 0 ? (diffMs / (1000 * 3600)) : 0;
+    }
+};
+
 const formatDays = (hours) => {
     if (hours === undefined || hours === null || hours === '' || isNaN(Number(hours))) return '-';
     const h = Number(hours);
@@ -13,7 +68,7 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
         return;
     }
 
-    const now = new Date().toLocaleString();
+    const now = getISTTimestamp();
 
     // Advanced Key Aggregations
     const totalCount = tickets.length;
@@ -23,8 +78,8 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
     const closedCount = tickets.filter(t => t.status === 'Closed').length;
     const onHoldCount = tickets.filter(t => t.status === 'On Hold').length;
     const escalatedCount = tickets.filter(t => t.status === 'Escalated' || (t.escalation_level && t.escalation_level !== 'L1')).length;
-    
-    const slaBreachCount = tickets.filter(t => t.SLA_Breach === 'True' || t.SLA_Breach === true).length;
+
+    const slaBreachCount = tickets.filter(t => isTicketBreached(t)).length;
     const slaBreachRate = totalCount > 0 ? ((slaBreachCount / totalCount) * 100).toFixed(1) : '0.0';
 
     const onTimeCount = totalCount - slaBreachCount;
@@ -54,7 +109,7 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
         deptMap[d].total++;
         if (t.status === 'Resolved' || t.status === 'Closed') deptMap[d].resolved++;
         if (t.status === 'Open' || t.status === 'In Progress') deptMap[d].open++;
-        if (t.SLA_Breach === 'True' || t.SLA_Breach === true) deptMap[d].breached++;
+        if (isTicketBreached(t)) deptMap[d].breached++;
         if (t.ticket_age_hours) deptMap[d].totalAge += Number(t.ticket_age_hours);
         if (t.solver_resolution_hours) deptMap[d].totalRes += Number(t.solver_resolution_hours);
         if (t.solver_delay_hours) deptMap[d].totalDelay += Number(t.solver_delay_hours);
@@ -68,7 +123,7 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
         locationMap[loc].total++;
         if (t.status === 'Open' || t.status === 'In Progress' || t.status === 'Escalated') locationMap[loc].open++;
         if (t.status === 'Resolved' || t.status === 'Closed') locationMap[loc].resolved++;
-        if (t.SLA_Breach === 'True' || t.SLA_Breach === true) locationMap[loc].breached++;
+        if (isTicketBreached(t)) locationMap[loc].breached++;
         if (t.ticket_age_hours) locationMap[loc].totalAge += Number(t.ticket_age_hours);
     });
 
@@ -80,7 +135,7 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
         categoryMap[cat].total++;
         const sevStr = String(t.severity || '').toLowerCase();
         if (sevStr === 'urgent' || sevStr === 'major') categoryMap[cat].urgentMajor++;
-        if (t.SLA_Breach === 'True' || t.SLA_Breach === true) categoryMap[cat].breached++;
+        if (isTicketBreached(t)) categoryMap[cat].breached++;
         if (t.solver_delay_hours) categoryMap[cat].totalDelay += Number(t.solver_delay_hours);
     });
 
@@ -150,11 +205,11 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
                 </thead>
                 <tbody>
                     ${Object.entries(deptMap).map(([dept, s]) => {
-                        const resRate = s.total > 0 ? ((s.resolved / s.total) * 100).toFixed(0) + '%' : '0%';
-                        const avgAge = s.total > 0 ? (s.totalAge / s.total / 24).toFixed(1) + 'd' : '-';
-                        const avgRes = s.resolved > 0 ? (s.totalRes / s.resolved / 24).toFixed(1) + 'd' : '-';
-                        const avgDelay = s.total > 0 ? (s.totalDelay / s.total).toFixed(1) + 'h' : '-';
-                        return `
+        const resRate = s.total > 0 ? ((s.resolved / s.total) * 100).toFixed(0) + '%' : '0%';
+        const avgAge = s.total > 0 ? (s.totalAge / s.total / 24).toFixed(1) + 'd' : '-';
+        const avgRes = s.resolved > 0 ? (s.totalRes / s.resolved / 24).toFixed(1) + 'd' : '-';
+        const avgDelay = s.total > 0 ? (s.totalDelay / s.total).toFixed(1) + 'h' : '-';
+        return `
                             <tr>
                                 <td><strong>${dept}</strong></td>
                                 <td>${s.total}</td>
@@ -166,7 +221,7 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
                                 <td>${avgDelay}</td>
                             </tr>
                         `;
-                    }).join('')}
+    }).join('')}
                 </tbody>
             </table>
 
@@ -184,7 +239,7 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
                             </tr>
                         </thead>
                         <tbody>
-                            ${Object.entries(locationMap).sort((a,b) => b[1].total - a[1].total).slice(0, 8).map(([loc, s]) => `
+                            ${Object.entries(locationMap).sort((a, b) => b[1].total - a[1].total).slice(0, 8).map(([loc, s]) => `
                                 <tr>
                                     <td><strong>${loc}</strong></td>
                                     <td>${s.total}</td>
@@ -210,7 +265,7 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
                             </tr>
                         </thead>
                         <tbody>
-                            ${Object.entries(categoryMap).sort((a,b) => b[1].total - a[1].total).slice(0, 8).map(([cat, s]) => `
+                            ${Object.entries(categoryMap).sort((a, b) => b[1].total - a[1].total).slice(0, 8).map(([cat, s]) => `
                                 <tr>
                                     <td><strong>${cat}</strong></td>
                                     <td>${s.total}</td>
@@ -247,8 +302,8 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
                 </thead>
                 <tbody>
                     ${tickets.map(t => {
-                        const isBreach = (t.SLA_Breach === 'True' || t.SLA_Breach === true);
-                        return `
+        const isBreach = isTicketBreached(t);
+        return `
                             <tr>
                                 <td><strong>#${t.ticket_id}</strong></td>
                                 <td>${t.dept_assigned || '-'}</td>
@@ -262,12 +317,12 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
                                 <td>${formatDays(t.ticket_age_hours)}</td>
                                 <td>${formatDays(t.solver_resolution_hours)}</td>
                                 <td>${formatDays(t.total_turnaround_hours)}</td>
-                                <td class="${t.solver_delay_hours > 0 ? 'badge-breach' : ''}">${formatDays(t.solver_delay_hours)}</td>
+                                <td class="${getTicketDelayHours(t) > 0 ? 'badge-breach' : ''}">${formatDays(getTicketDelayHours(t))}</td>
                                 <td>${t.assigned_by || t.raised_by || '-'}</td>
                                 <td>${t.assigned_to || '-'}</td>
                             </tr>
                         `;
-                    }).join('')}
+    }).join('')}
                 </tbody>
             </table>
 
@@ -294,9 +349,9 @@ const formatPersonWithPhone = (personVal, rawId, usersList = []) => {
     if (/\(\d{5,}\)/.test(val)) return val;
 
     if (usersList && usersList.length > 0) {
-        const u = usersList.find(usr => 
-            String(usr.employee_id) === val || 
-            String(usr.email).toLowerCase() === val.toLowerCase() || 
+        const u = usersList.find(usr =>
+            String(usr.employee_id) === val ||
+            String(usr.email).toLowerCase() === val.toLowerCase() ||
             String(usr.name).toLowerCase() === val.toLowerCase() ||
             (rawId && (String(usr.employee_id) === String(rawId) || String(usr.email).toLowerCase() === String(rawId).toLowerCase()))
         );
@@ -328,11 +383,11 @@ export const exportExecutiveCSV = (tickets = [], filters = {}, usersList = []) =
     let csv = '\uFEFF' + headers.map(escapeCsv).join(',') + '\n';
 
     tickets.forEach(t => {
-        const isBreach = (t.SLA_Breach === 'True' || t.SLA_Breach === true);
+        const isBreach = isTicketBreached(t);
         const ageHours = Number(t.ticket_age_hours || 0);
         const resHours = Number(t.solver_resolution_hours || 0);
         const turnHours = Number(t.total_turnaround_hours || 0);
-        const delayHours = Number(t.solver_delay_hours || 0);
+        const delayHours = getTicketDelayHours(t);
         const closureDelayHours = Number(t.closure_delay_hours || 0);
 
         let attachmentUrl = t.attachment && String(t.attachment).trim() !== 'nan' ? String(t.attachment).trim() : '';
@@ -383,7 +438,7 @@ export const exportExecutiveCSV = (tickets = [], filters = {}, usersList = []) =
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const nowStr = new Date().toISOString().split('T')[0];
+    const nowStr = formatISTDate(getISTDate());
     link.setAttribute('download', `Ambuja_Executive_Master_Report_${nowStr}.csv`);
     document.body.appendChild(link);
     link.click();

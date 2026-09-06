@@ -6,8 +6,9 @@ import DocumentPreview from '../components/DocumentPreview';
 import AttachmentBadge from '../components/AttachmentBadge';
 import AdminAnalytics from '../components/AdminAnalytics';
 import SLACountdownBadge from '../components/SLACountdownBadge';
+import SLABreachModeToggle from '../components/SLABreachModeToggle';
 import { exportExecutivePDF, exportExecutiveCSV } from '../utils/exportExecutiveReports';
-import { parseDateToTimestamp } from '../utils/dateUtils';
+import { parseDateToTimestamp, parseDateString, getISTDate } from '../utils/dateUtils';
 import { TrendingUp, Clock, Download, FileText, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, PlusCircle, ArrowUpRight, RefreshCw, CheckCircle, UserPlus, Activity, Maximize2, Minimize2, MessageSquare, Filter } from 'lucide-react';
 
 // --- COLLAPSIBLE TIMELINE NODE ---
@@ -123,6 +124,7 @@ const ViewerDashboard = ({ user, setUser }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [showKPIs, setShowKPIs] = useState(true);
+    const [slaBreachMode, setSlaBreachMode] = useState('active'); // 'active' (Live / Active Breach) or 'all' (All-Time SLA Breach)
     const [previewUrl, setPreviewUrl] = useState(null);
     const handlePreviewUrl = (url) => {
         if (!url) return;
@@ -135,45 +137,35 @@ const ViewerDashboard = ({ user, setUser }) => {
     };
 
     const getDisplayDelayDays = (row) => {
-        if (row.solver_delay_hours && Number(row.solver_delay_hours) > 0) {
+        if (!row) return '0d';
+        if (row.solver_delay_hours !== undefined && row.solver_delay_hours !== null && Number(row.solver_delay_hours) > 0) {
             return (Number(row.solver_delay_hours) / 24).toFixed(1) + 'd';
         }
-        if (row.deadline && String(row.deadline).trim()) {
-            try {
-                const dStr = String(row.deadline).trim();
-                let dDate = null;
-                if (dStr.includes('-')) {
-                    const parts = dStr.split(' ');
-                    const dateParts = parts[0].split('-');
-                    if (dateParts[0].length === 4) {
-                        dDate = new Date(dStr);
-                    } else if (dateParts[0].length === 2) {
-                        const [d, m, y] = dateParts;
-                        const timePart = parts[1] || '23:59';
-                        dDate = new Date(`${y}-${m}-${d}T${timePart}:00`);
-                    }
-                } else if (dStr.includes('/')) {
-                    const parts = dStr.split(' ');
-                    const dateParts = parts[0].split('/');
-                    if (dateParts[0].length === 2) {
-                        const [d, m, y] = dateParts;
-                        const timePart = parts[1] || '23:59';
-                        dDate = new Date(`${y}-${m}-${d}T${timePart}:00`);
-                    }
-                } else {
-                    dDate = new Date(dStr);
-                }
-
-                if (dDate && !isNaN(dDate.getTime())) {
-                    const now = new Date();
-                    const diffMs = now.getTime() - dDate.getTime();
-                    if (diffMs > 0 && row.status !== 'Resolved' && row.status !== 'Closed') {
-                        return (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd';
-                    }
-                }
-            } catch (e) { }
+        if (row.delay_hours !== undefined && row.delay_hours !== null && Number(row.delay_hours) > 0) {
+            return (Number(row.delay_hours) / 24).toFixed(1) + 'd';
         }
-        return '0d';
+        if (!row.deadline || String(row.deadline).toLowerCase() === 'nan') return '0d';
+        const deadlineDate = parseDateString(row.deadline);
+        if (!deadlineDate) return '0d';
+
+        const st = String(row.status || '').toLowerCase();
+        const ct = String(row.closure_type || '').toLowerCase();
+        const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+
+        if (isFinished) {
+            const finishStr = row.closed_timestamp || row.solved_timestamp;
+            if (finishStr && String(finishStr).toLowerCase() !== 'nan') {
+                const finishDate = parseDateString(finishStr);
+                if (finishDate) {
+                    const diffMs = finishDate.getTime() - deadlineDate.getTime();
+                    return diffMs > 0 ? (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd' : '0d';
+                }
+            }
+            return '0d';
+        } else {
+            const diffMs = getISTDate().getTime() - deadlineDate.getTime();
+            return diffMs > 0 ? (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd' : '0d';
+        }
     };
 
     const [ticketsList, setTicketsList] = useState([]);
@@ -313,8 +305,36 @@ const ViewerDashboard = ({ user, setUser }) => {
         exportExecutiveCSV(filteredAgeing, {}, usersList);
     };
 
-    const isLate = (t) => {
-        return (t.SLA_Breach === 'True' || t.SLA_Breach === true);
+
+    const isLate = (ticket, targetMode = slaBreachMode) => {
+        if (!ticket) return false;
+        if (ticket.solver_delay_hours !== undefined && ticket.solver_delay_hours !== null && Number(ticket.solver_delay_hours) > 0) {
+            const st = String(ticket.status || '').toLowerCase();
+            const ct = String(ticket.closure_type || '').toLowerCase();
+            const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+            if (isFinished && targetMode === 'active') return false;
+            return true;
+        }
+        if (!ticket.deadline || String(ticket.deadline).toLowerCase() === 'nan') return false;
+
+        const deadlineDate = parseDateString(ticket.deadline);
+        if (!deadlineDate) return false;
+
+        const st = String(ticket.status || '').toLowerCase();
+        const ct = String(ticket.closure_type || '').toLowerCase();
+        const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+
+        if (isFinished) {
+            if (targetMode === 'active') return false;
+            const finishStr = ticket.closed_timestamp || ticket.solved_timestamp;
+            if (finishStr && String(finishStr).toLowerCase() !== 'nan') {
+                const finishDate = parseDateString(finishStr);
+                if (finishDate) return finishDate > deadlineDate;
+            }
+            return ticket.SLA_Breach === true || ticket.SLA_Breach === 'True';
+        }
+
+        return getISTDate() > deadlineDate;
     };
 
     const matchStartOfWord = (text, query) => {
@@ -327,9 +347,9 @@ const ViewerDashboard = ({ user, setUser }) => {
     };
 
     const filteredAgeing = useMemo(() => {
-        const q = ageingSearch.trim();
+        return (ageingData || []).filter(a => {
+            const q = ageingSearch.trim();
 
-        return ageingData.filter(a => {
             const fields = {
                 ticket_id: String(a.ticket_id || ''),
                 dept_assigned: String(a.dept_assigned || ''),
@@ -500,11 +520,11 @@ const ViewerDashboard = ({ user, setUser }) => {
             else if (stat === 'on hold') increment('onHold', lvl);
             else if (stat === 'escalate' || stat === 'escalated') increment('escalated', lvl);
 
-            if (isLate(t)) increment('late', lvl);
+            if (isLate(t, slaBreachMode)) increment('late', lvl);
         });
 
         return counts;
-    }, [filteredAgeing]);
+    }, [filteredAgeing, slaBreachMode]);
 
     const renderTooltip = (levelsObj) => {
         const entries = Object.entries(levelsObj).sort();
@@ -537,32 +557,31 @@ const ViewerDashboard = ({ user, setUser }) => {
                             Read-only access to global service metrics and ageing reports.
                         </p>
                     </div>
-                    {activeTab !== 'analytics' && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <button
-                                className="btn p-2 text-xs flex-row gap-1"
-                                onClick={() => setShowKPIs(prev => !prev)}
-                                title={showKPIs ? "Hide KPI Cards" : "Show KPI Cards"}
-                                style={{
-                                    whiteSpace: 'nowrap',
-                                    borderRadius: '6px',
-                                    backgroundColor: 'var(--bg-card, #131b2e)',
-                                    border: '1px solid var(--border, #1e293b)',
-                                    color: 'var(--text-main, #f1f5f9)',
-                                    fontSize: '11px',
-                                    padding: '6px 10px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                {showKPIs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                                {showKPIs ? 'Hide KPIs' : 'Show KPIs'}
-                            </button>
-                        </div>
-                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <SLABreachModeToggle mode={slaBreachMode} onChange={setSlaBreachMode} />
+                        <button
+                            className="btn p-2 text-xs flex-row gap-1"
+                            onClick={() => setShowKPIs(prev => !prev)}
+                            title={showKPIs ? "Hide KPI Cards" : "Show KPI Cards"}
+                            style={{
+                                whiteSpace: 'nowrap',
+                                borderRadius: '6px',
+                                backgroundColor: 'var(--bg-card, #131b2e)',
+                                border: '1px solid var(--border, #1e293b)',
+                                color: 'var(--text-main, #f1f5f9)',
+                                fontSize: '11px',
+                                padding: '6px 10px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {showKPIs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                            {showKPIs ? 'Hide KPIs' : 'Show KPIs'}
+                        </button>
+                    </div>
                 </div>
 
-                {/* --- GLOBAL KPI METRICS BOARD (ALWAYS VISIBLE IN ANALYTICS, COLLAPSIBLE IN OTHER TABS) --- */}
-                {(activeTab === 'analytics' || showKPIs) && (
+                {/* --- GLOBAL KPI METRICS BOARD (COLLAPSIBLE) --- */}
+                {showKPIs && (
                     <div className="kpi-grid">
                         <div className="card kpi-card kpi-blue" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #3b82f6', background: 'linear-gradient(180deg, rgba(59,130,246,0.25) 0%, rgba(59,130,246,0) 100%)' }}>
                             <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>Total</p>
@@ -610,13 +629,15 @@ const ViewerDashboard = ({ user, setUser }) => {
                         </div>
                         <div className="card kpi-card kpi-sla kpi-orange" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #F7941D', background: 'linear-gradient(180deg, rgba(247,148,29,0.25) 0%, rgba(247,148,29,0) 100%)' }}>
                             {renderTooltip(globalKPI.late.levels)}
-                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>SLA Breach</p>
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>
+                                {slaBreachMode === 'active' ? 'Live SLA Breach' : 'All-Time SLA Breach'}
+                            </p>
                             <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.late.count}</h2>
                         </div>
                     </div>
                 )}
 
-                {activeTab === 'analytics' && !loading && <AdminAnalytics tickets={ticketsList} usersList={usersList} />}
+                {activeTab === 'analytics' && !loading && <AdminAnalytics tickets={ticketsList} usersList={usersList} slaBreachMode={slaBreachMode} onSlaBreachModeChange={setSlaBreachMode} />}
 
                 {activeTab === 'ageing' && !loading && (
                     <div className="card" style={isAgeingExpanded ? { position: 'fixed', inset: '16px', zIndex: 1000, backgroundColor: 'var(--bg-main, #0f172a)', margin: 0, padding: '20px', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' } : { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>

@@ -6,8 +6,9 @@ import { MessageSquare, Zap, CheckCircle, Star, ArrowUpRight, FileText, Clock, A
 import DocumentPreview from '../components/DocumentPreview';
 import AttachmentBadge from '../components/AttachmentBadge';
 import SLACountdownBadge from '../components/SLACountdownBadge';
+import SLABreachModeToggle from '../components/SLABreachModeToggle';
 import CannedResponseSelector from '../components/CannedResponseSelector';
-import { getISTDate, getISTMinDatetime, getISTTomorrowDate, parseDateToTimestamp } from '../utils/dateUtils';
+import { getISTDate, getISTMinDatetime, getISTTomorrowDate, parseDateToTimestamp, parseDateString } from '../utils/dateUtils';
 
 // --- Expandable Description Component ---
 const ExpandableDescription = ({ text }) => {
@@ -272,14 +273,28 @@ const SolverDashboard = ({ user, setUser }) => {
         const params = new URLSearchParams(location.search);
         const ticketId = params.get('ticket_id');
         if (ticketId && tickets.length > 0) {
-            const ticket = tickets.find(t => String(t.ticket_id) === String(ticketId));
+            const userEmpId = user?.employee_id ? String(user.employee_id).toLowerCase() : '';
+            const userEmail = user?.email ? String(user.email).toLowerCase() : '';
+            // Prefer ticket matching current solver's assignment
+            const ticket = tickets.find(t => {
+                if (String(t.ticket_id) !== String(ticketId)) return false;
+                const assignedRaw = String(t.assigned_to || '').trim().toLowerCase();
+                return (userEmpId && assignedRaw === userEmpId) || (userEmail && assignedRaw === userEmail);
+            }) || tickets.find(t => String(t.ticket_id) === String(ticketId));
+
             if (ticket) {
-                setActiveTab('active_tasks');
+                if (ticket.status === 'Escalated' || ticket.status === 'Escalation Resolved') {
+                    setActiveTab('escalated_tasks');
+                } else if (ticket.status === 'Closed' || ticket.status === 'Declined' || ticket.status === 'On Hold' || ticket.status === 'Resolved') {
+                    setActiveTab('closed_tasks');
+                } else {
+                    setActiveTab('active_tasks');
+                }
                 handleTicketClick(ticket);
                 navigate(location.pathname, { replace: true });
             }
         }
-    }, [location.search, tickets]);
+    }, [location.search, tickets, user]);
 
     const [ticketLogs, setTicketLogs] = useState([]);
     const [logsLoading, setLogsLoading] = useState(false);
@@ -297,16 +312,17 @@ const SolverDashboard = ({ user, setUser }) => {
     // Extend Deadline Modal State
     const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
     const [extendDeadlineDate, setExtendDeadlineDate] = useState('');
+    const [extendReason, setExtendReason] = useState('');
 
     // Escalate Modal State
     const [isEscalateModalOpen, setIsEscalateModalOpen] = useState(false);
     const [showKPIs, setShowKPIs] = useState(true);
+    const [slaBreachMode, setSlaBreachMode] = useState('active'); // 'active' (Live / Active Breach) or 'all' (All-Time SLA Breach)
     const [escalateDept, setEscalateDept] = useState('');
     const [escalateTarget, setEscalateTarget] = useState('');
     const [escalateReason, setEscalateReason] = useState('');
     const [escalateAttachment, setEscalateAttachment] = useState(null);
     const [escalateFileName, setEscalateFileName] = useState('');
-    const [escalateDeadline, setEscalateDeadline] = useState('');
     const [isEscalatingImage, setIsEscalatingImage] = useState(false);
     const [smartEscalationSuggestions, setSmartEscalationSuggestions] = useState(null);
     const [topEscalationOptions, setTopEscalationOptions] = useState([]);
@@ -315,7 +331,7 @@ const SolverDashboard = ({ user, setUser }) => {
     const getSolverDetails = (solverId) => {
         if (!solverId || String(solverId).toLowerCase() === 'nan' || solverId === 'Unassigned') return 'Unassigned';
         const solver = usersList.find(u => String(u.employee_id) === String(solverId) || String(u.email) === String(solverId));
-        if (solver) return `${solver.name} (${solver.phone_number || solver.phone || 'N/A'})`;
+        if (solver) return `${solver.name} [${solver.department || 'N/A'}] (${solver.phone_number || solver.phone || 'N/A'})`;
         return solverId;
     };
 
@@ -351,9 +367,10 @@ const SolverDashboard = ({ user, setUser }) => {
 
     const handoverSolverOptions = useMemo(() => {
         if (!handoverDept) return [];
+        const cleanDept = handoverDept.trim().toLowerCase();
         return usersList
             .filter(u => {
-                if (u.department !== handoverDept) return false;
+                if ((u.department || '').trim().toLowerCase() !== cleanDept) return false;
                 if (['Admin', 'Superadmin', 'Super Admin', 'Viewer'].includes(u.role)) return false;
                 if (restrictedUserIdentifiers.has(String(u.employee_id).toLowerCase()) || restrictedUserIdentifiers.has(String(u.email || '').toLowerCase())) return false;
                 return true;
@@ -407,15 +424,36 @@ const SolverDashboard = ({ user, setUser }) => {
         if (isHandoverModalOpen && selectedTicket?.description) {
             api.post('/tickets/smart_suggest', {
                 query: selectedTicket.description,
-                current_solver_emp_id: selectedTicket.assigned_to
+                current_solver_emp_id: selectedTicket.assigned_to,
+                department: handoverDept || ''
             })
                 .then(res => {
                     if (res.data) {
                         const cats = res.data.suggested_categories;
-                        if (cats && cats.assigned_to) {
-                            const solverId = String(cats.assigned_to).trim().toLowerCase();
-                            if (restrictedUserIdentifiers.has(solverId)) {
-                                cats.assigned_to = '';
+                        if (cats) {
+                            if (cats.assigned_to) {
+                                const solverId = String(cats.assigned_to).trim().toLowerCase();
+                                if (restrictedUserIdentifiers.has(solverId)) {
+                                    cats.assigned_to = '';
+                                }
+                            }
+                            // Strict department verification: ensure suggested solver exists within the suggested department
+                            const targetDeptClean = (cats.dept_assigned || handoverDept || '').trim().toLowerCase();
+                            if (cats.assigned_to && targetDeptClean) {
+                                const solverUser = (usersList || []).find(u =>
+                                    String(u.employee_id).toLowerCase() === String(cats.assigned_to).toLowerCase() ||
+                                    String(u.email || '').toLowerCase() === String(cats.assigned_to).toLowerCase()
+                                );
+                                if (!solverUser || (solverUser.department && solverUser.department.trim().toLowerCase() !== targetDeptClean)) {
+                                    // Pick a valid active solver strictly from targetDeptClean
+                                    const validSolver = (usersList || []).find(u =>
+                                        u.department && u.department.trim().toLowerCase() === targetDeptClean &&
+                                        !['Admin', 'Superadmin', 'Super Admin', 'Viewer'].includes(u.role) &&
+                                        !restrictedUserIdentifiers.has(String(u.employee_id).toLowerCase()) &&
+                                        !restrictedUserIdentifiers.has(String(u.email || '').toLowerCase())
+                                    );
+                                    cats.assigned_to = validSolver ? validSolver.employee_id : '';
+                                }
                             }
                         }
                         setSmartHandoverSuggestions(cats || null);
@@ -425,7 +463,7 @@ const SolverDashboard = ({ user, setUser }) => {
         } else {
             setSmartHandoverSuggestions(null);
         }
-    }, [isHandoverModalOpen, selectedTicket, restrictedUserIdentifiers]);
+    }, [isHandoverModalOpen, selectedTicket, restrictedUserIdentifiers, handoverDept, usersList]);
 
     useEffect(() => {
         loadDashboardData();
@@ -496,11 +534,28 @@ const SolverDashboard = ({ user, setUser }) => {
             return;
         }
 
+        // Check if solver is updating from Open to In Progress without extending deadline
+        const isFromOpenToInProgress = (selectedTicket?.status === 'Open' || currentStatus === 'Open') && newStatus === 'In Progress';
+        const isAlreadyExtended = selectedTicket?.has_extended === true ||
+            String(selectedTicket?.has_extended).toLowerCase() === 'true' ||
+            String(selectedTicket?.has_extended).toLowerCase() === '1';
+
+        if (isFromOpenToInProgress && !newDeadline && !isAlreadyExtended) {
+            const proceedWithoutExtend = window.confirm(
+                "⚠️ NOTICE:\n\nYou are updating the ticket status to 'In Progress' without extending the deadline.\n\nOnce saved, deadline extension will NOT be possible for this ticket later.\n\nClick OK to proceed with saving, or Cancel if you want to extend the deadline first."
+            );
+            if (!proceedWithoutExtend) {
+                return;
+            }
+        }
+
         const formData = new FormData();
         formData.append('ticket_id', ticketId);
-        formData.append('escalation_level', selectedTicket.escalation_level || 'L1');
+        formData.append('escalation_level', selectedTicket?.escalation_level || 'L1');
         formData.append('status', newStatus);
         formData.append('remarks', remarks);
+        if (user?.email) formData.append('user_email', user.email);
+        if (user?.employee_id) formData.append('user_emp_id', user.employee_id);
         if (attachment) formData.append('attachment', attachment);
         if (newDeadline) {
             const dtObj = new Date(newDeadline);
@@ -552,18 +607,41 @@ const SolverDashboard = ({ user, setUser }) => {
             return;
         }
 
-        const currentRemarks = updateForms[selectedTicket.ticket_id]?.remarks || '';
-        if (!currentRemarks.trim()) {
-            alert("Please provide a reason for extension in the Remarks field.");
-            setIsExtendModalOpen(false);
+        const currLevel = selectedTicket?.escalation_level || 'L1';
+        const isChildLevel = currLevel && currLevel !== 'L1';
+        const absDeadlineStr = selectedTicket?.absolute_deadline || '';
+        if (isChildLevel && absDeadlineStr && absDeadlineStr.toLowerCase() !== 'nan' && absDeadlineStr.toLowerCase() !== 'none') {
+            try {
+                const adp = absDeadlineStr.split(' ')[0].split('-');
+                let aYear, aMonth, aDay;
+                if (adp[0].length === 4) { [aYear, aMonth, aDay] = adp; }
+                else { [aDay, aMonth, aYear] = adp; }
+                const absDate = `${aYear}-${String(aMonth).padStart(2, '0')}-${String(aDay).padStart(2, '0')}`;
+                if (extendDeadlineDate > absDate) {
+                    const confirmed = window.confirm(
+                        `⚠️ POLICY NOTICE / RULE WARNING:\n\nThe Original Ticket Deadline set by the raiser is ${absDeadlineStr.split(' ')[0]}.\nYou are attempting to extend your level deadline beyond this absolute deadline to ${extendDeadlineDate.split('-').reverse().join('/')}.\n\nThis will be recorded as a rule breach in the ticket audit logs.\n\nDo you wish to proceed?`
+                    );
+                    if (!confirmed) {
+                        return;
+                    }
+                }
+            } catch (ex) { }
+        }
+
+        const reason = (extendReason || updateForms[selectedTicket.ticket_id]?.remarks || '').trim();
+        if (!reason) {
+            alert("Please provide a reason for deadline extension.");
             return;
         }
+
         try {
             const formData = new FormData();
             formData.append('ticket_id', selectedTicket.ticket_id);
             formData.append('status', 'In Progress');
-            formData.append('remarks', currentRemarks);
+            formData.append('remarks', reason);
             formData.append('escalation_level', selectedTicket.escalation_level || 'L1');
+            if (user?.email) formData.append('user_email', user.email);
+            if (user?.employee_id) formData.append('user_emp_id', user.employee_id);
             const dParts = extendDeadlineDate.split('-');
             let formattedDeadline = extendDeadlineDate;
             if (dParts.length === 3 && dParts[0].length === 4) {
@@ -577,6 +655,7 @@ const SolverDashboard = ({ user, setUser }) => {
             alert("Deadline extended successfully.");
             setIsExtendModalOpen(false);
             setExtendDeadlineDate('');
+            setExtendReason('');
 
             // Clear the form remarks after success
             setUpdateForms(prev => ({
@@ -687,13 +766,6 @@ const SolverDashboard = ({ user, setUser }) => {
                 formData.append('attachment', escalateAttachment);
             }
 
-            if (escalateDeadline) {
-
-                const dtObj = new Date(escalateDeadline);
-                const formattedDeadline = `${String(dtObj.getDate()).padStart(2, '0')}-${String(dtObj.getMonth() + 1).padStart(2, '0')}-${dtObj.getFullYear()} 23:59`;
-                formData.append('new_deadline', formattedDeadline);
-            }
-
             await escalateTicketL1(formData);
             alert("Ticket escalated successfully.");
             setIsEscalateModalOpen(false);
@@ -739,15 +811,21 @@ const SolverDashboard = ({ user, setUser }) => {
         setUpdateForms(prev => ({ ...prev, [ticketId]: { ...prev[ticketId] || {}, [field]: value } }));
     };
 
+    const isAssignedToUser = (t, u) => {
+        if (!t || !u) return false;
+        const assignedRaw = String(t.assigned_to || '').trim().toLowerCase();
+        if (!assignedRaw || assignedRaw === 'nan' || assignedRaw === 'none' || assignedRaw === 'unassigned') return false;
+        const userEmpId = u.employee_id ? String(u.employee_id).trim().toLowerCase() : '';
+        const userEmail = u.email ? String(u.email).trim().toLowerCase() : '';
+        const userName = u.name ? String(u.name).trim().toLowerCase() : '';
+        return (userEmpId && assignedRaw === userEmpId) ||
+            (userEmail && assignedRaw === userEmail) ||
+            (userName && assignedRaw === userName);
+    };
+
     const myTasks = tickets.filter(t => {
         if (!user) return false;
-        const assignedRaw = String(t.assigned_to || '');
-        const userName = user.name ? String(user.name) : '';
-        const userEmpId = user.employee_id ? String(user.employee_id) : '';
-        const userEmail = user.email ? String(user.email) : '';
-        return (userName && assignedRaw.includes(userName)) ||
-            (userEmpId && assignedRaw.includes(userEmpId)) ||
-            (userEmail && (assignedRaw.toLowerCase() === userEmail.toLowerCase() || assignedRaw.toLowerCase().includes(userEmail.toLowerCase())));
+        return isAssignedToUser(t, user);
     });
 
     const deptFilteredTasks = myTasks.filter(t => {
@@ -813,20 +891,33 @@ const SolverDashboard = ({ user, setUser }) => {
     // =========================================================================
     // GLOBAL KPI ENGINE (PINNED TO TOP OF ALL TABS)
     // =========================================================================
-    const isLate = (ticket) => {
-        if (!ticket.deadline || ticket.status === 'Closed' || ticket.status === 'Resolved') return false;
-        try {
-            const [datePart, timePart] = ticket.deadline.split(' ');
-            const dateParts = datePart.includes('-') ? datePart.split('-') : datePart.split('/');
-            let day, month, year;
-            if (dateParts[0].length === 4) {
-                [year, month, day] = dateParts;
-            } else {
-                [day, month, year] = dateParts;
+    const isLate = (ticket, targetMode = slaBreachMode) => {
+        if (!ticket) return false;
+        if (ticket.solver_delay_hours !== undefined && ticket.solver_delay_hours !== null && Number(ticket.solver_delay_hours) > 0) return true;
+        if (!ticket.deadline || String(ticket.deadline).toLowerCase() === 'nan') return false;
+
+        const deadlineDate = parseDateString(ticket.deadline);
+        if (!deadlineDate) return false;
+
+        const st = String(ticket.status || '').toLowerCase();
+        const ct = String(ticket.closure_type || '').toLowerCase();
+        const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+
+        if (targetMode === 'active') {
+            if (isFinished) return false;
+            return getISTDate() > deadlineDate;
+        }
+
+        if (isFinished) {
+            const finishStr = ticket.closed_timestamp || ticket.solved_timestamp;
+            if (finishStr && String(finishStr).toLowerCase() !== 'nan') {
+                const finishDate = parseDateString(finishStr);
+                if (finishDate) return finishDate > deadlineDate;
             }
-            const [hour, minute] = timePart ? timePart.split(':') : [0, 0];
-            return new Date(year, month - 1, day, hour, minute) < new Date();
-        } catch (err) { return false; }
+            return ticket.SLA_Breach === true || ticket.SLA_Breach === 'True';
+        }
+
+        return getISTDate() > deadlineDate;
     };
 
     const solverKPI = useMemo(() => {
@@ -866,11 +957,11 @@ const SolverDashboard = ({ user, setUser }) => {
             else if (stat === 'declined') increment('declined', lvl);
             else if (stat === 'on hold') increment('onHold', lvl);
 
-            if (isLate(t) || t.SLA_Breach === 'True' || t.SLA_Breach === true) increment('late', lvl);
+            if (isLate(t, slaBreachMode)) increment('late', lvl);
         });
 
         return counts;
-    }, [deptFilteredTasks]);
+    }, [deptFilteredTasks, slaBreachMode]);
 
     const renderTooltip = (levelsObj) => {
         const entries = Object.entries(levelsObj).sort();
@@ -1015,6 +1106,7 @@ const SolverDashboard = ({ user, setUser }) => {
                             <Zap size={22} color="#f59e0b" /> Solver Workspace
                         </h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <SLABreachModeToggle mode={slaBreachMode} onChange={setSlaBreachMode} />
                             <button
                                 className="btn p-2 text-xs flex-row gap-1"
                                 onClick={() => setShowKPIs(prev => !prev)}
@@ -1086,7 +1178,9 @@ const SolverDashboard = ({ user, setUser }) => {
                         </div>
                         <div className="card kpi-card kpi-sla kpi-orange" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #F7941D', background: 'linear-gradient(180deg, rgba(247,148,29,0.25) 0%, rgba(247,148,29,0) 100%)' }}>
                             {renderTooltip(solverKPI.late.levels)}
-                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>SLA Breach</p>
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>
+                                {slaBreachMode === 'all' ? 'All-Time SLA Breach' : 'Live SLA Breach'}
+                            </p>
                             <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{solverKPI.late.count}</h2>
                         </div>
                     </div>
@@ -1353,6 +1447,20 @@ const SolverDashboard = ({ user, setUser }) => {
                                         )}
                                     </div>
 
+                                    {selectedTicket.status === 'Escalated' && (
+                                        <div className="card" style={{ padding: '16px', backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px', position: 'relative', zIndex: 10, marginBottom: '16px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                                                <ArrowUpRight size={18} color="#ef4444" />
+                                                <h4 style={{ color: '#f87171', margin: 0, fontSize: '13px', fontWeight: '600' }}>
+                                                    Ticket Escalated (Awaiting Specialist Resolution)
+                                                </h4>
+                                            </div>
+                                            <p style={{ color: '#d4d4d8', fontSize: '11px', margin: 0, lineHeight: '1.5' }}>
+                                                This ticket has been escalated to higher level support and is currently awaiting their investigation and resolution. Once resolved by the specialist, you will be able to review and accept/reject the resolution here.
+                                            </p>
+                                        </div>
+                                    )}
+
                                     {selectedTicket.status === 'Escalation Resolved' && (
                                         <div className="card" style={{ padding: '16px', backgroundColor: '#18181b', border: '1px solid #3b82f6', position: 'relative', zIndex: 10, marginBottom: '16px' }}>
                                             <h4 style={{ color: '#60a5fa', margin: '0 0 8px 0', fontSize: '13px' }}>Resolution Pending Review</h4>
@@ -1376,7 +1484,7 @@ const SolverDashboard = ({ user, setUser }) => {
                                                 A handover request to <strong style={{ color: '#f59e0b' }}>{getSolverDetails(selectedTicket.reassign_requested_to)}</strong> has been submitted and is currently awaiting Admin approval. This ticket is non-actionable until the request is granted or denied.
                                             </p>
                                         </div>
-                                    ) : selectedTicket.status !== 'Closed' && selectedTicket.status !== 'Resolved' && selectedTicket.status !== 'Escalated' && selectedTicket.status !== 'Escalation Resolved' && selectedTicket.status !== 'Declined' && selectedTicket.status !== 'On Hold' && (
+                                    ) : (isAssignedToUser(selectedTicket, user) && selectedTicket.status !== 'Closed' && selectedTicket.status !== 'Resolved' && selectedTicket.status !== 'Escalated' && selectedTicket.status !== 'Escalation Resolved' && selectedTicket.status !== 'Declined' && selectedTicket.status !== 'On Hold') && (
                                         <div className="card" style={{ padding: '16px', backgroundColor: '#18181b', border: '1px solid #27272a', position: 'relative', zIndex: 10 }}>
                                             <form onSubmit={(e) => handleStatusUpdate(e, selectedTicket.ticket_id, selectedTicket.status, selectedTicket.solver_comments)}>
                                                 <div className="ticket-update-form-row" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '16px' }}>
@@ -1483,9 +1591,30 @@ const SolverDashboard = ({ user, setUser }) => {
                                                 <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '10px', paddingTop: '12px', borderTop: '1px solid var(--border, rgba(255,255,255,0.06))' }}>
                                                     <button type="submit" style={{ backgroundColor: '#10b981', color: '#ffffff', fontWeight: 'bold', fontSize: '11.5px', padding: '0 20px', height: '34px', margin: 0, borderRadius: '6px', border: '1px solid #059669', boxShadow: '0 2px 8px rgba(16, 185, 129, 0.35)', cursor: 'pointer' }}>Update Status</button>
 
-                                                    {selectedTicket.status === 'Open' && (updateForms[selectedTicket.ticket_id]?.status || selectedTicket.status) === 'In Progress' && (!selectedTicket.escalation_level || selectedTicket.escalation_level === 'L1') && !selectedTicket.has_extended && String(selectedTicket.has_extended).toLowerCase() !== 'true' && (
-                                                        <button type="button" onClick={() => setIsExtendModalOpen(true)} style={{ fontSize: '11px', fontWeight: 'bold', padding: '0 14px', height: '34px', color: '#7c3aed', backgroundColor: 'rgba(139, 92, 246, 0.15)', border: '1px solid #8b5cf6', margin: 0, borderRadius: '6px', cursor: 'pointer', boxShadow: '0 1px 4px rgba(139, 92, 246, 0.15)' }}>Extend Deadline</button>
-                                                    )}
+                                                    {(() => {
+                                                        const isAlreadyExtended = selectedTicket.has_extended === true ||
+                                                            String(selectedTicket.has_extended).toLowerCase() === 'true' ||
+                                                            String(selectedTicket.has_extended).toLowerCase() === '1';
+                                                        const formStatus = updateForms[selectedTicket.ticket_id]?.status || selectedTicket.status;
+                                                        const isInitialWork = selectedTicket.status === 'Open' && formStatus === 'In Progress';
+
+                                                        if (isInitialWork && !isAlreadyExtended) {
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setExtendReason(updateForms[selectedTicket.ticket_id]?.remarks || '');
+                                                                        setExtendDeadlineDate('');
+                                                                        setIsExtendModalOpen(true);
+                                                                    }}
+                                                                    style={{ fontSize: '11px', fontWeight: 'bold', padding: '0 14px', height: '34px', color: '#7c3aed', backgroundColor: 'rgba(139, 92, 246, 0.15)', border: '1px solid #8b5cf6', margin: 0, borderRadius: '6px', cursor: 'pointer', boxShadow: '0 1px 4px rgba(139, 92, 246, 0.15)' }}
+                                                                >
+                                                                    Extend Deadline
+                                                                </button>
+                                                            );
+                                                        }
+                                                        return null;
+                                                    })()}
                                                     {(selectedTicket.status === 'Open' || selectedTicket.status === 'In Progress') && !['Resolved', 'Decline', 'On Hold'].includes(updateForms[selectedTicket.ticket_id]?.status || selectedTicket.status) && (() => {
                                                         const ts = parseDateToTimestamp(selectedTicket.timestamp);
                                                         const dl = parseDateToTimestamp(selectedTicket.deadline);
@@ -1750,10 +1879,28 @@ const SolverDashboard = ({ user, setUser }) => {
                                                         if (afterDeadline > minAllowed) minAllowed = afterDeadline;
                                                     } catch (ex) { /* fallback to today */ }
                                                 }
+
                                                 if (minAllowed && val < minAllowed) {
                                                     alert("New deadline must be after the current deadline.");
                                                     setExtendDeadlineDate(minAllowed);
                                                     return;
+                                                }
+
+                                                // For escalated levels (L2, L3, etc.), check if extending beyond the raiser's absolute deadline
+                                                const currLevel = selectedTicket?.escalation_level || 'L1';
+                                                const isChildLevel = currLevel && currLevel !== 'L1';
+                                                const absDeadlineStr = selectedTicket?.absolute_deadline || '';
+                                                if (isChildLevel && absDeadlineStr && absDeadlineStr.toLowerCase() !== 'nan' && absDeadlineStr.toLowerCase() !== 'none') {
+                                                    try {
+                                                        const adp = absDeadlineStr.split(' ')[0].split('-');
+                                                        let aYear, aMonth, aDay;
+                                                        if (adp[0].length === 4) { [aYear, aMonth, aDay] = adp; }
+                                                        else { [aDay, aMonth, aYear] = adp; }
+                                                        const absDate = `${aYear}-${String(aMonth).padStart(2, '0')}-${String(aDay).padStart(2, '0')}`;
+                                                        if (val > absDate) {
+                                                            alert(`⚠️ Important Notice:\nThe Original Ticket Deadline set by the raiser is ${absDeadlineStr.split(' ')[0]}.\nYou are selecting a date (${val.split('-').reverse().join('/')}) beyond this absolute deadline.\nThis rule breach will be logged with the ticket.`);
+                                                        }
+                                                    } catch (ex) { }
                                                 }
                                             }
                                             setExtendDeadlineDate(val);
@@ -1781,7 +1928,50 @@ const SolverDashboard = ({ user, setUser }) => {
                                         style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#a1a1aa' }}
                                     />
                                 </div>
-                                <p style={{ fontSize: '9px', color: '#a1a1aa', marginTop: '8px' }}>Note: The reason for this extension will be pulled from the 'Remark' field on the ticket update panel.</p>
+                                {(() => {
+                                    const currLevel = selectedTicket?.escalation_level || 'L1';
+                                    const isChildLevel = currLevel && currLevel !== 'L1';
+                                    const absDeadlineStr = selectedTicket?.absolute_deadline || '';
+                                    if (isChildLevel && absDeadlineStr && extendDeadlineDate) {
+                                        try {
+                                            const adp = absDeadlineStr.split(' ')[0].split('-');
+                                            let aYear, aMonth, aDay;
+                                            if (adp[0].length === 4) { [aYear, aMonth, aDay] = adp; }
+                                            else { [aDay, aMonth, aYear] = adp; }
+                                            const absDate = `${aYear}-${String(aMonth).padStart(2, '0')}-${String(aDay).padStart(2, '0')}`;
+                                            if (extendDeadlineDate > absDate) {
+                                                return (
+                                                    <div style={{ marginTop: '6px', padding: '6px 8px', borderRadius: '4px', backgroundColor: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', fontSize: '9.5px', lineHeight: '1.3' }}>
+                                                        ⚠️ Warning: Selected deadline exceeds the overall ticket deadline ({absDeadlineStr.split(' ')[0]}).
+                                                    </div>
+                                                );
+                                            }
+                                        } catch (e) { }
+                                    }
+                                    return null;
+                                })()}
+                            </div>
+                            <div className="form-group" style={{ marginBottom: '16px' }}>
+                                <label style={{ fontSize: '10px' }}>Reason for Extension</label>
+                                <textarea
+                                    className="form-control"
+                                    rows="2"
+                                    required
+                                    placeholder="Explain why deadline needs to be extended..."
+                                    style={{ padding: '8px', fontSize: '11px', width: '100%', resize: 'vertical' }}
+                                    value={extendReason}
+                                    onChange={e => {
+                                        setExtendReason(e.target.value);
+                                        handleUpdateFormChange(selectedTicket?.ticket_id, 'remarks', e.target.value);
+                                    }}
+                                />
+                                <CannedResponseSelector
+                                    currentText={extendReason}
+                                    onSelect={val => {
+                                        setExtendReason(val);
+                                        handleUpdateFormChange(selectedTicket?.ticket_id, 'remarks', val);
+                                    }}
+                                />
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                                 <button type="button" className="btn" onClick={() => setIsExtendModalOpen(false)} style={{ backgroundColor: 'transparent', border: '1px solid #3f3f46', fontSize: '10px', padding: '6px 12px' }}>Cancel</button>
@@ -1812,14 +2002,6 @@ const SolverDashboard = ({ user, setUser }) => {
                                             onClick={() => {
                                                 if (opt.dept) setEscalateDept(opt.dept);
                                                 if (opt.solver_email || opt.solver_emp_id) setEscalateTarget(opt.solver_email || opt.solver_emp_id);
-                                                if (opt.deadline_hours) {
-                                                    const targetDate = new Date();
-                                                    targetDate.setHours(targetDate.getHours() + Math.round(opt.deadline_hours));
-                                                    const yyyy = targetDate.getFullYear();
-                                                    const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
-                                                    const dd = String(targetDate.getDate()).padStart(2, '0');
-                                                    setEscalateDeadline(`${yyyy}-${mm}-${dd}`);
-                                                }
                                             }}
                                             style={{
                                                 backgroundColor: 'var(--bg-card, rgba(24,24,27,0.7))',
@@ -1880,69 +2062,6 @@ const SolverDashboard = ({ user, setUser }) => {
                                 <label style={{ fontSize: '10px' }}>Reason for Escalation</label>
                                 <textarea className="form-control" rows="3" required placeholder="Explain why you are escalating this ticket..." style={{ padding: '8px', fontSize: '10px' }} value={escalateReason} onChange={e => setEscalateReason(e.target.value)}></textarea>
                                 <CannedResponseSelector currentText={escalateReason} onSelect={setEscalateReason} />
-                            </div>
-
-                            <div className="form-group" style={{ marginBottom: '16px' }}>
-                                <label style={{ fontSize: '10px' }}>
-                                    Set Deadline (Optional)
-                                </label>
-                                {selectedTicket && (
-                                    <div style={{ fontSize: '9px', color: '#8b5cf6', marginBottom: '4px' }}>
-                                        Original Deadline: {selectedTicket.absolute_deadline?.split(' ')[0] || selectedTicket.deadline?.split(' ')[0]}
-                                    </div>
-                                )}
-                                <div
-                                    style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', cursor: 'pointer' }}
-                                    onClick={() => {
-                                        const dateEl = document.getElementById('escalateDeadlinePicker');
-                                        if (dateEl && dateEl.showPicker) {
-                                            try { dateEl.showPicker(); } catch (err) { }
-                                        }
-                                    }}
-                                >
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        placeholder="dd/mm/yyyy"
-                                        required
-                                        readOnly
-                                        style={{
-                                            padding: '8px 36px 8px 10px',
-                                            fontSize: '11px',
-                                            width: '100%',
-                                            cursor: 'pointer',
-                                            backgroundColor: 'var(--bg-main, #18181b)'
-                                        }}
-                                        value={
-                                            escalateDeadline
-                                                ? (() => {
-                                                    const p = escalateDeadline.split('-');
-                                                    return p.length === 3 && p[0].length === 4 ? `${p[2]}/${p[1]}/${p[0]}` : escalateDeadline;
-                                                })()
-                                                : ''
-                                        }
-                                    />
-                                    <input
-                                        id="escalateDeadlinePicker"
-                                        type="date"
-                                        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
-                                        value={escalateDeadline}
-                                        onChange={e => {
-                                            const val = e.target.value;
-                                            if (val) {
-                                                const minAllowed = getLocalMinDatetime();
-                                                if (minAllowed && new Date(val) < new Date(minAllowed)) {
-                                                    alert("Deadline cannot be set to a past time.");
-                                                    setEscalateDeadline(minAllowed);
-                                                    return;
-                                                }
-                                            }
-                                            setEscalateDeadline(val);
-                                        }}
-                                        min={getLocalMinDatetime()}
-                                    />
-                                    <Calendar size={14} style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#a1a1aa' }} />
-                                </div>
                             </div>
 
                             <div className="form-group" style={{ marginBottom: '16px' }}>

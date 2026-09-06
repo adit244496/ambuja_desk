@@ -19,7 +19,7 @@ api.interceptors.request.use((config) => {
             if (parsed.email) config.headers['X-User-Email'] = parsed.email;
             if (parsed.employee_id) config.headers['X-User-EmpId'] = parsed.employee_id;
         }
-    } catch (e) {}
+    } catch (e) { }
     return config;
 }, (error) => Promise.reject(error));
 
@@ -117,7 +117,11 @@ export const requestTicketHandover = async (data) => {
 };
 
 export const approveHandover = async (data) => {
-    const response = await api.post('/tickets/approve-handover', data);
+    const payload = {
+        ...data,
+        decision: data?.decision || (data?.approve !== undefined ? (data.approve ? 'approve' : 'reject') : 'approve')
+    };
+    const response = await api.post('/tickets/approve-handover', payload);
     return response.data;
 };
 
@@ -323,7 +327,7 @@ export const uploadImportFile = async (entity, file) => {
 export const fetchCannedResponses = async (user = null) => {
     let currentUser = user;
     if (!currentUser) {
-        try { currentUser = JSON.parse(sessionStorage.getItem('ticket_user')); } catch (e) {}
+        try { currentUser = JSON.parse(sessionStorage.getItem('ticket_user')); } catch (e) { }
     }
     const params = {};
     if (currentUser) {
@@ -336,7 +340,7 @@ export const fetchCannedResponses = async (user = null) => {
 
 export const createCannedResponse = async (data) => {
     let currentUser = null;
-    try { currentUser = JSON.parse(sessionStorage.getItem('ticket_user')); } catch (e) {}
+    try { currentUser = JSON.parse(sessionStorage.getItem('ticket_user')); } catch (e) { }
     const payload = { ...data };
     if (currentUser && !payload.role) {
         payload.role = currentUser.role;
@@ -347,7 +351,7 @@ export const createCannedResponse = async (data) => {
 
 export const updateCannedResponse = async (id, data) => {
     let currentUser = null;
-    try { currentUser = JSON.parse(sessionStorage.getItem('ticket_user')); } catch (e) {}
+    try { currentUser = JSON.parse(sessionStorage.getItem('ticket_user')); } catch (e) { }
     const params = {};
     if (currentUser) {
         params.user_email = currentUser.email || currentUser.employee_id;
@@ -359,7 +363,7 @@ export const updateCannedResponse = async (id, data) => {
 
 export const deleteCannedResponse = async (id) => {
     let currentUser = null;
-    try { currentUser = JSON.parse(sessionStorage.getItem('ticket_user')); } catch (e) {}
+    try { currentUser = JSON.parse(sessionStorage.getItem('ticket_user')); } catch (e) { }
     const params = {};
     if (currentUser) {
         params.user_email = currentUser.email || currentUser.employee_id;

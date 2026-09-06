@@ -13,10 +13,11 @@ import Layout from '../components/Layout';
 import DocumentPreview from '../components/DocumentPreview';
 import AttachmentBadge from '../components/AttachmentBadge';
 import SLACountdownBadge from '../components/SLACountdownBadge';
+import SLABreachModeToggle from '../components/SLABreachModeToggle';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import AdminAnalytics from '../components/AdminAnalytics';
 import { exportExecutivePDF, exportExecutiveCSV } from '../utils/exportExecutiveReports';
-import { parseDateToTimestamp } from '../utils/dateUtils';
+import { parseDateToTimestamp, parseDateString, getISTDate } from '../utils/dateUtils';
 import { Download, AlertTriangle, Settings, TrendingUp, Clock, Users, MapPin, Cog, CheckCircle2, ClipboardCheck, Zap, ChevronDown, ChevronUp, PlusCircle, ArrowUpRight, RefreshCw, CheckCircle, UserPlus, UserCheck, Activity, FileText, Maximize2, Minimize2, MessageSquare, Filter, Pencil, Key, Power, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 
 const ExpandableDescription = ({ text }) => {
@@ -253,6 +254,7 @@ const AdminDashboard = ({ user, setUser }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [showKPIs, setShowKPIs] = useState(true);
+    const [slaBreachMode, setSlaBreachMode] = useState('active'); // 'active' (Live / Active Breach) or 'all' (All-Time SLA Breach)
     const [previewUrl, setPreviewUrl] = useState(null);
     const handlePreviewUrl = (url) => {
         if (!url) return;
@@ -265,45 +267,32 @@ const AdminDashboard = ({ user, setUser }) => {
     };
 
     const getDisplayDelayDays = (row) => {
-        if (row.solver_delay_hours && Number(row.solver_delay_hours) > 0) {
+        if (!row) return '0d';
+        if (row.solver_delay_hours !== undefined && row.solver_delay_hours !== null && Number(row.solver_delay_hours) > 0) {
             return (Number(row.solver_delay_hours) / 24).toFixed(1) + 'd';
         }
-        if (row.deadline && String(row.deadline).trim()) {
-            try {
-                const dStr = String(row.deadline).trim();
-                let dDate = null;
-                if (dStr.includes('-')) {
-                    const parts = dStr.split(' ');
-                    const dateParts = parts[0].split('-');
-                    if (dateParts[0].length === 4) {
-                        dDate = new Date(dStr);
-                    } else if (dateParts[0].length === 2) {
-                        const [d, m, y] = dateParts;
-                        const timePart = parts[1] || '23:59';
-                        dDate = new Date(`${y}-${m}-${d}T${timePart}:00`);
-                    }
-                } else if (dStr.includes('/')) {
-                    const parts = dStr.split(' ');
-                    const dateParts = parts[0].split('/');
-                    if (dateParts[0].length === 2) {
-                        const [d, m, y] = dateParts;
-                        const timePart = parts[1] || '23:59';
-                        dDate = new Date(`${y}-${m}-${d}T${timePart}:00`);
-                    }
-                } else {
-                    dDate = new Date(dStr);
-                }
+        if (!row.deadline || String(row.deadline).toLowerCase() === 'nan') return '0d';
+        const deadlineDate = parseDateString(row.deadline);
+        if (!deadlineDate) return '0d';
 
-                if (dDate && !isNaN(dDate.getTime())) {
-                    const now = new Date();
-                    const diffMs = now.getTime() - dDate.getTime();
-                    if (diffMs > 0 && row.status !== 'Resolved' && row.status !== 'Closed') {
-                        return (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd';
-                    }
+        const st = String(row.status || '').toLowerCase();
+        const ct = String(row.closure_type || '').toLowerCase();
+        const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+
+        if (isFinished) {
+            const finishStr = row.closed_timestamp || row.solved_timestamp;
+            if (finishStr && String(finishStr).toLowerCase() !== 'nan') {
+                const finishDate = parseDateString(finishStr);
+                if (finishDate) {
+                    const diffMs = finishDate.getTime() - deadlineDate.getTime();
+                    return diffMs > 0 ? (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd' : '0d';
                 }
-            } catch (e) { }
+            }
+            return '0d';
+        } else {
+            const diffMs = getISTDate().getTime() - deadlineDate.getTime();
+            return diffMs > 0 ? (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd' : '0d';
         }
-        return '0d';
     };
 
     const [usersList, setUsersList] = useState([]);
@@ -714,10 +703,16 @@ const AdminDashboard = ({ user, setUser }) => {
     };
 
     // --- APPROVALS HANDLERS ---
-    const handleApproval = async (ticketId, approve) => {
+    const handleApproval = async (ticketId, approve, escalationLevel = 'L1') => {
         if (!window.confirm(`Are you sure you want to ${approve ? 'approve' : 'reject'} this handover?`)) return;
         try {
-            await approveHandover({ ticket_id: ticketId, approve, user_email: user?.email || user?.employee_id || 'Admin' });
+            await approveHandover({
+                ticket_id: ticketId,
+                decision: approve ? 'approve' : 'reject',
+                approve,
+                escalation_level: escalationLevel,
+                user_email: user?.email || user?.employee_id || 'Admin'
+            });
             alert(`Handover ${approve ? 'approved' : 'rejected'} successfully.`);
             loadSystemData();
         } catch (err) {
@@ -1063,14 +1058,35 @@ const AdminDashboard = ({ user, setUser }) => {
     // =========================================================================
     // GLOBAL KPI ENGINE (PINNED TO TOP OF ALL TABS)
     // =========================================================================
-    const isLate = (ticket) => {
-        if (!ticket.deadline || ticket.status === 'Closed' || ticket.status === 'Resolved') return false;
-        try {
-            const [datePart, timePart] = ticket.deadline.split(' ');
-            const [day, month, year] = datePart.split('-');
-            const [hour, minute] = timePart ? timePart.split(':') : [0, 0];
-            return new Date(year, month - 1, day, hour, minute) < new Date();
-        } catch (err) { return false; }
+    const isLate = (ticket, targetMode = slaBreachMode) => {
+        if (!ticket) return false;
+        if (ticket.solver_delay_hours !== undefined && ticket.solver_delay_hours !== null && Number(ticket.solver_delay_hours) > 0) {
+            const st = String(ticket.status || '').toLowerCase();
+            const ct = String(ticket.closure_type || '').toLowerCase();
+            const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+            if (isFinished && targetMode === 'active') return false;
+            return true;
+        }
+        if (!ticket.deadline || String(ticket.deadline).toLowerCase() === 'nan') return false;
+
+        const deadlineDate = parseDateString(ticket.deadline);
+        if (!deadlineDate) return false;
+
+        const st = String(ticket.status || '').toLowerCase();
+        const ct = String(ticket.closure_type || '').toLowerCase();
+        const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+
+        if (isFinished) {
+            if (targetMode === 'active') return false;
+            const finishStr = ticket.closed_timestamp || ticket.solved_timestamp;
+            if (finishStr && String(finishStr).toLowerCase() !== 'nan') {
+                const finishDate = parseDateString(finishStr);
+                if (finishDate) return finishDate > deadlineDate;
+            }
+            return ticket.SLA_Breach === true || ticket.SLA_Breach === 'True';
+        }
+
+        return getISTDate() > deadlineDate;
     };
 
     const globalKPI = useMemo(() => {
@@ -1147,11 +1163,11 @@ const AdminDashboard = ({ user, setUser }) => {
             else if (stat === 'on hold') increment('onHold', lvl);
             else if (stat === 'escalate' || stat === 'escalated') increment('escalated', lvl);
 
-            if (isLate(t)) increment('late', lvl);
+            if (isLate(t, slaBreachMode)) increment('late', lvl);
         });
 
         return counts;
-    }, [filteredAgeing]);
+    }, [filteredAgeing, slaBreachMode]);
 
     const renderTooltip = (levelsObj) => {
         const entries = Object.entries(levelsObj).sort();
@@ -1176,32 +1192,31 @@ const AdminDashboard = ({ user, setUser }) => {
                         <Settings size={22} color="#3b82f6" /> System Administration
                     </h2>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {activeTab !== 'analytics' && (
-                            <button
-                                className="btn p-2 text-xs flex-row gap-1"
-                                onClick={() => setShowKPIs(prev => !prev)}
-                                title={showKPIs ? "Hide KPI Cards" : "Show KPI Cards"}
-                                style={{
-                                    whiteSpace: 'nowrap',
-                                    borderRadius: '6px',
-                                    backgroundColor: 'var(--bg-card, #131b2e)',
-                                    border: '1px solid var(--border, #1e293b)',
-                                    color: 'var(--text-main, #f1f5f9)',
-                                    fontSize: '11px',
-                                    padding: '6px 10px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                {showKPIs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                                {showKPIs ? 'Hide KPIs' : 'Show KPIs'}
-                            </button>
-                        )}
+                        <SLABreachModeToggle mode={slaBreachMode} onChange={setSlaBreachMode} />
+                        <button
+                            className="btn p-2 text-xs flex-row gap-1"
+                            onClick={() => setShowKPIs(prev => !prev)}
+                            title={showKPIs ? "Hide KPI Cards" : "Show KPI Cards"}
+                            style={{
+                                whiteSpace: 'nowrap',
+                                borderRadius: '6px',
+                                backgroundColor: 'var(--bg-card, #131b2e)',
+                                border: '1px solid var(--border, #1e293b)',
+                                color: 'var(--text-main, #f1f5f9)',
+                                fontSize: '11px',
+                                padding: '6px 10px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {showKPIs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                            {showKPIs ? 'Hide KPIs' : 'Show KPIs'}
+                        </button>
                     </div>
                 </div>
                 {error && <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '8px', borderRadius: '3px', marginBottom: '12px', fontSize: '10px' }}>{error}</div>}
 
-                {/* --- GLOBAL KPI METRICS BOARD (ALWAYS VISIBLE IN ANALYTICS, COLLAPSIBLE IN OTHER TABS) --- */}
-                {(activeTab === 'analytics' || showKPIs) && (
+                {/* --- GLOBAL KPI METRICS BOARD (COLLAPSIBLE) --- */}
+                {showKPIs && (
                     <div className="kpi-grid">
                         <div className="card kpi-card kpi-blue" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #3b82f6', background: 'linear-gradient(180deg, rgba(59,130,246,0.25) 0%, rgba(59,130,246,0) 100%)' }}>
 
@@ -1251,7 +1266,9 @@ const AdminDashboard = ({ user, setUser }) => {
 
                         <div className="card kpi-card kpi-sla kpi-orange" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #F7941D', background: 'linear-gradient(180deg, rgba(247,148,29,0.25) 0%, rgba(247,148,29,0) 100%)' }}>
                             {renderTooltip(globalKPI.late.levels)}
-                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>SLA Breach</p>
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>
+                                {slaBreachMode === 'active' ? 'Live SLA Breach' : 'All-Time SLA Breach'}
+                            </p>
                             <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.late.count}</h2>
                         </div>
                     </div>
@@ -1259,7 +1276,7 @@ const AdminDashboard = ({ user, setUser }) => {
 
                 {/* TAB CONTENT VIEWS */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, paddingBottom: '16px' }}>
-                    {activeTab === 'analytics' && !loading && <AdminAnalytics tickets={ticketsList} />}
+                    {activeTab === 'analytics' && !loading && <AdminAnalytics tickets={ageingData && ageingData.length > 0 ? ageingData : ticketsList} usersList={usersList} slaBreachMode={slaBreachMode} onSlaBreachModeChange={setSlaBreachMode} />}
 
                     {activeTab === 'approvals' && !loading && (
                         <div className="card">
@@ -1299,8 +1316,8 @@ const AdminDashboard = ({ user, setUser }) => {
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '10px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: '120px' }}>
-                                                    <button onClick={() => handleApproval(ticket.ticket_id, true)} className="btn btn-success" style={{ padding: '4px 8px', fontSize: '9px', marginRight: '5px' }}>Approve</button>
-                                                    <button onClick={() => handleApproval(ticket.ticket_id, false)} className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '9px' }}>Reject</button>
+                                                    <button onClick={() => handleApproval(ticket.ticket_id, true, ticket.escalation_level)} className="btn btn-success" style={{ padding: '4px 8px', fontSize: '9px', marginRight: '5px' }}>Approve</button>
+                                                    <button onClick={() => handleApproval(ticket.ticket_id, false, ticket.escalation_level)} className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '9px' }}>Reject</button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -1311,9 +1328,9 @@ const AdminDashboard = ({ user, setUser }) => {
                     )}
                     {activeTab === 'ageing' && !loading && (
                         <div className="card flex-table-card" style={isAgeingExpanded ? { position: 'fixed', inset: '16px', zIndex: 1000, backgroundColor: 'var(--bg-main, #0f172a)', margin: 0, padding: '20px', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' } : { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, marginBottom: 0 }}>
-                            <div className="flex-row justify-between mb-4 gap-3">
+                            <div className="ageing-controls-bar flex-row justify-between mb-4 gap-3">
                                 <h3 className="m-0 text-lg" style={{ whiteSpace: 'nowrap' }}>⏳ Full Ticket Ageing Analytics</h3>
-                                <div className="flex-row justify-end gap-2 flex-1" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div className="ageing-controls-group flex-row justify-end gap-2 flex-1" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
                                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                                         <select
                                             className="form-control"
@@ -1511,10 +1528,10 @@ const AdminDashboard = ({ user, setUser }) => {
 
 
                             {/* PILL NAVIGATION & CONTEXTUAL ACTIONS */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+                            <div className="master-controls-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
 
                                 {/* PILLS */}
-                                <div style={{ display: 'flex', gap: '8px' }}>
+                                <div className="master-pills-bar" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                     {['users', 'locations', 'projects_dept', 'categories', 'import'].map(tab => (
                                         <button
                                             key={tab}
@@ -1537,9 +1554,9 @@ const AdminDashboard = ({ user, setUser }) => {
                                 </div>
 
                                 {/* ACTIONS */}
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <div className="master-actions-bar" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                                     {masterControlTab === 'canned_responses' && (
-                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                        <div className="master-search-bar" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <input
                                                 type="text"
                                                 className="form-control"
@@ -1583,7 +1600,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                         </div>
                                     )}
                                     {masterControlTab === 'users' && (
-                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                        <div className="master-search-bar" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <select
                                                 className="form-control"
                                                 value={userSearchConstraint}
@@ -1648,7 +1665,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                         </div>
                                     )}
                                     {masterControlTab === 'locations' && (
-                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                        <div className="master-search-bar" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <select
                                                 className="form-control"
                                                 value={locSearchConstraint}
@@ -1707,7 +1724,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                         </div>
                                     )}
                                     {masterControlTab === 'projects_dept' && (
-                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                        <div className="master-search-bar" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <select
                                                 className="form-control"
                                                 value={deptSearchConstraint}
@@ -1764,7 +1781,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                         </div>
                                     )}
                                     {masterControlTab === 'categories' && (
-                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                        <div className="master-search-bar" style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                                             <select
                                                 className="form-control"
                                                 value={catSearchConstraint}
@@ -1828,39 +1845,32 @@ const AdminDashboard = ({ user, setUser }) => {
                             {/* USERS */}
                             {masterControlTab === 'users' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
-                                    {/* STATIC HEADER OUTSIDE SCROLL CONTAINER */}
-                                    <div style={{ backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
+                                    <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                                        <table style={{ width: '100%', minWidth: '980px', borderCollapse: 'collapse', fontSize: '11px' }}>
                                             <thead>
-                                                <tr>
-                                                    <th onClick={() => handleSortClick('employee_id')} style={{ width: '12%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Emp ID">
+                                                <tr style={{ position: 'sticky', top: 0, zIndex: 5, backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
+                                                    <th onClick={() => handleSortClick('employee_id')} style={{ width: '100px', minWidth: '100px', padding: '12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Emp ID">
                                                         Emp ID {userSortField === 'employee_id' ? (userSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th onClick={() => handleSortClick('name')} style={{ width: '18%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Name">
+                                                    <th onClick={() => handleSortClick('name')} style={{ width: '170px', minWidth: '170px', padding: '12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Name">
                                                         Name {userSortField === 'name' ? (userSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th onClick={() => handleSortClick('email')} style={{ width: '18%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Email">
+                                                    <th onClick={() => handleSortClick('email')} style={{ width: '180px', minWidth: '180px', padding: '12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Email">
                                                         Email {userSortField === 'email' ? (userSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th style={{ width: '10%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold' }}>Role</th>
-                                                    <th onClick={() => handleSortClick('department')} style={{ width: '10%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Dept">
+                                                    <th style={{ width: '90px', minWidth: '90px', padding: '12px', textAlign: 'left', fontWeight: 'bold', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }}>Role</th>
+                                                    <th onClick={() => handleSortClick('department')} style={{ width: '130px', minWidth: '130px', padding: '12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Dept">
                                                         Dept {userSortField === 'department' ? (userSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th onClick={() => handleSortClick('designation')} style={{ width: '10%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Designation">
+                                                    <th onClick={() => handleSortClick('designation')} style={{ width: '130px', minWidth: '130px', padding: '12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Designation">
                                                         Designation {userSortField === 'designation' ? (userSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th onClick={() => handleSortClick('reporting_manager')} style={{ width: '12%', padding: '12px 12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Reporting Manager">
+                                                    <th onClick={() => handleSortClick('reporting_manager')} style={{ width: '180px', minWidth: '180px', padding: '12px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Reporting Manager">
                                                         Reporting Manager {userSortField === 'reporting_manager' ? (userSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th style={{ width: '10%', padding: '12px 12px', textAlign: 'center', fontWeight: 'bold' }}>Actions</th>
+                                                    <th style={{ width: '100px', minWidth: '100px', padding: '12px', textAlign: 'center', fontWeight: 'bold', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }}>Actions</th>
                                                 </tr>
                                             </thead>
-                                        </table>
-                                    </div>
-
-                                    {/* SCROLLABLE BODY */}
-                                    <div style={{ flex: 1, overflowY: 'auto' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
                                             <tbody>
                                                 {filteredUsers.map(u => {
                                                     const isActive = String(u.active).toUpperCase() !== 'FALSE';
@@ -1877,30 +1887,35 @@ const AdminDashboard = ({ user, setUser }) => {
                                                                 transition: 'background-color 0.2s'
                                                             }}
                                                         >
-                                                            <td style={{ width: '12%', padding: '12px 12px' }}>{u.employee_id}</td>
-                                                            <td style={{ width: '18%', padding: '12px 12px', fontWeight: 'bold' }}>{u.name}
-                                                                {isActive ? (
-                                                                    <span style={{ backgroundColor: '#d1fae5', color: 'var(--text-muted)', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', marginLeft: '8px' }}>Active</span>
-                                                                ) : (
-                                                                    <span style={{ backgroundColor: '#fee2e2', color: '#ef4444', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', marginLeft: '8px' }}>Inactive</span>
-                                                                )}</td>
-                                                            <td style={{ width: '18%', padding: '12px 12px', color: 'var(--text-muted)' }}>{u.email}</td>
-                                                            <td style={{ width: '10%', padding: '12px 12px' }}>
+                                                            <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>{u.employee_id}</td>
+                                                            <td style={{ padding: '12px', fontWeight: 'bold' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                    <span>{u.name}</span>
+                                                                    {isActive ? (
+                                                                        <span style={{ backgroundColor: '#d1fae5', color: '#065f46', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 'normal', whiteSpace: 'nowrap' }}>Active</span>
+                                                                    ) : (
+                                                                        <span style={{ backgroundColor: '#fee2e2', color: '#ef4444', padding: '2px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 'normal', whiteSpace: 'nowrap' }}>Inactive</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ padding: '12px', color: 'var(--text-muted)', wordBreak: 'break-all' }}>{u.email}</td>
+                                                            <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>
                                                                 <span style={{
                                                                     backgroundColor: u.role === 'Admin' || u.role === 'Superadmin' || u.role === 'Super Admin' ? 'rgba(239, 68, 68, 0.1)' : u.role === 'Viewer' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(59, 130, 246, 0.1)',
                                                                     color: u.role === 'Admin' || u.role === 'Superadmin' || u.role === 'Super Admin' ? '#ef4444' : u.role === 'Viewer' ? '#a855f7' : '#3b82f6',
                                                                     padding: '4px 8px',
                                                                     borderRadius: '4px',
                                                                     fontSize: '10px',
-                                                                    fontWeight: 'bold'
+                                                                    fontWeight: 'bold',
+                                                                    display: 'inline-block'
                                                                 }}>
                                                                     {u.role}
                                                                 </span>
                                                             </td>
-                                                            <td style={{ width: '10%', padding: '12px 12px', color: 'var(--text-muted)' }}>{u.department}</td>
-                                                            <td style={{ width: '10%', padding: '12px 12px', color: 'var(--text-muted)' }}>{u.designation || '-'}</td>
-                                                            <td style={{ width: '12%', padding: '12px 12px', color: 'var(--text-muted)' }}>{getSolverDetails(u.reporting_manager)}</td>
-                                                            <td style={{ width: '10%', padding: '12px 12px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                                                            <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{u.department}</td>
+                                                            <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{u.designation || '-'}</td>
+                                                            <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{getSolverDetails(u.reporting_manager)}</td>
+                                                            <td style={{ padding: '12px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                                                     {!String(u.role).toLowerCase().includes('super') && (
                                                                         <button
@@ -1966,37 +1981,30 @@ const AdminDashboard = ({ user, setUser }) => {
                             {/* LOCATIONS */}
                             {masterControlTab === 'locations' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
-                                    {/* STATIC HEADER OUTSIDE SCROLL CONTAINER */}
-                                    <div style={{ backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
+                                    <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                                        <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', fontSize: '11px' }}>
                                             <thead>
-                                                <tr>
-                                                    <th onClick={() => handleLocSortClick('project')} style={{ width: '30%', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Project">
+                                                <tr style={{ position: 'sticky', top: 0, zIndex: 5, backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
+                                                    <th onClick={() => handleLocSortClick('project')} style={{ width: '30%', minWidth: '160px', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Project">
                                                         Project {locSortField === 'project' ? (locSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th onClick={() => handleLocSortClick('tower')} style={{ width: '30%', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Tower">
+                                                    <th onClick={() => handleLocSortClick('tower')} style={{ width: '30%', minWidth: '160px', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Tower">
                                                         Tower {locSortField === 'tower' ? (locSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
-                                                    <th onClick={() => handleLocSortClick('location')} style={{ width: '40%', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Location">
+                                                    <th onClick={() => handleLocSortClick('location')} style={{ width: '40%', minWidth: '220px', padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Location">
                                                         Location {locSortField === 'location' ? (locSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                     </th>
                                                 </tr>
                                             </thead>
-                                        </table>
-                                    </div>
-
-                                    {/* SCROLLABLE BODY */}
-                                    <div style={{ flex: 1, overflowY: 'auto' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
                                             <tbody>
                                                 {filteredLocations.map(loc => (
                                                     <tr key={loc.location} onClick={() => {
                                                         if (selectedMasterLocations.includes(loc.location)) setSelectedMasterLocations(selectedMasterLocations.filter(l => l !== loc.location));
                                                         else setSelectedMasterLocations([...selectedMasterLocations, loc.location]);
                                                     }} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', backgroundColor: selectedMasterLocations.includes(loc.location) ? 'rgba(59, 130, 246, 0.1)' : 'transparent' }} >
-                                                        <td style={{ width: '30%', padding: '12px 16px', fontWeight: '600', color: 'var(--text-muted)', fontSize: '11px' }}>{loc.project}</td>
-                                                        <td style={{ width: '30%', padding: '12px 16px' }}>{loc.tower}</td>
-                                                        <td style={{ width: '40%', padding: '12px 16px', color: 'var(--text-muted)' }}>{loc.location}</td>
+                                                        <td style={{ padding: '12px 16px', fontWeight: '600', color: 'var(--text-muted)', fontSize: '11px' }}>{loc.project}</td>
+                                                        <td style={{ padding: '12px 16px' }}>{loc.tower}</td>
+                                                        <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>{loc.location}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -2008,7 +2016,7 @@ const AdminDashboard = ({ user, setUser }) => {
 
                             {/* PROJECTS & DEPARTMENTS */}
                             {masterControlTab === 'projects_dept' && (
-                                <div style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
+                                <div className="master-split-grid" style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
                                     {/* PROJECTS */}
                                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-main)', fontWeight: '600', color: 'var(--text-muted)', fontSize: '11px' }}>
@@ -2085,7 +2093,7 @@ const AdminDashboard = ({ user, setUser }) => {
 
                             {/* CATEGORIES */}
                             {masterControlTab === 'categories' && (
-                                <div style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
+                                <div className="master-split-grid" style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
                                     {/* ISSUE CATEGORIES */}
                                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-main)', fontWeight: '600', color: 'var(--text-muted)', fontSize: '11px' }}>
@@ -2166,26 +2174,26 @@ const AdminDashboard = ({ user, setUser }) => {
                                     </div>
 
                                     <div className="card" style={{ padding: '0', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                                        <div className="table-responsive" style={{ maxHeight: '550px', overflowY: 'auto' }}>
-                                            <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                                        <div className="table-responsive" style={{ maxHeight: '550px', overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                                            <table className="data-table" style={{ width: '100%', minWidth: '850px', borderCollapse: 'collapse', fontSize: '11px' }}>
                                                 <thead>
-                                                    <tr style={{ backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
-                                                        <th onClick={() => handleCannedSortClick('id')} style={{ padding: '10px 12px', textAlign: 'center', width: '50px', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by ID">
+                                                    <tr style={{ position: 'sticky', top: 0, zIndex: 5, backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border)' }}>
+                                                        <th onClick={() => handleCannedSortClick('id')} style={{ padding: '10px 12px', textAlign: 'center', width: '60px', minWidth: '60px', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by ID">
                                                             ID {cannedSortField === 'id' ? (cannedSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                         </th>
-                                                        <th onClick={() => handleCannedSortClick('label')} style={{ padding: '10px 12px', textAlign: 'left', width: '220px', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Title">
+                                                        <th onClick={() => handleCannedSortClick('label')} style={{ padding: '10px 12px', textAlign: 'left', width: '200px', minWidth: '200px', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Title">
                                                             Template Title / Label {cannedSortField === 'label' ? (cannedSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                         </th>
-                                                        <th onClick={() => handleCannedSortClick('text')} style={{ padding: '10px 12px', textAlign: 'left', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Content">
+                                                        <th onClick={() => handleCannedSortClick('text')} style={{ padding: '10px 12px', textAlign: 'left', minWidth: '250px', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Content">
                                                             Response Content Text {cannedSortField === 'text' ? (cannedSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                         </th>
-                                                        <th onClick={() => handleCannedSortClick('created_by')} style={{ padding: '10px 12px', textAlign: 'left', width: '180px', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Owner">
+                                                        <th onClick={() => handleCannedSortClick('created_by')} style={{ padding: '10px 12px', textAlign: 'left', width: '160px', minWidth: '160px', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Owner">
                                                             Created By / Owner {cannedSortField === 'created_by' ? (cannedSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                         </th>
-                                                        <th onClick={() => handleCannedSortClick('is_custom')} style={{ padding: '10px 12px', textAlign: 'center', width: '120px', cursor: 'pointer', userSelect: 'none' }} title="Click to sort by Scope">
+                                                        <th onClick={() => handleCannedSortClick('is_custom')} style={{ padding: '10px 12px', textAlign: 'center', width: '120px', minWidth: '120px', cursor: 'pointer', userSelect: 'none', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }} title="Click to sort by Scope">
                                                             Scope / Type {cannedSortField === 'is_custom' ? (cannedSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                         </th>
-                                                        <th style={{ padding: '10px 12px', textAlign: 'center', width: '100px' }}>Actions</th>
+                                                        <th style={{ padding: '10px 12px', textAlign: 'center', width: '100px', minWidth: '100px', backgroundColor: 'var(--bg-main)', whiteSpace: 'nowrap' }}>Actions</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -2309,7 +2317,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                     </div>
 
                                     {/* Import Tabs Sub-Navigation */}
-                                    <div style={{ display: 'flex', gap: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+                                    <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '12px', flexWrap: 'wrap' }}>
                                         {['users', 'locations', 'departments', 'issue_categories', 'activity_categories'].map(tab => (
                                             <button key={tab} className={`btn ${activeImportTab === tab ? 'force-white-text' : ''}`} style={{ backgroundColor: activeImportTab === tab ? '#3b82f6' : 'transparent', border: activeImportTab === tab ? 'none' : '1px solid #cbd5e1', fontSize: '11px', padding: '6px 16px', color: activeImportTab === tab ? '#fff' : '#475569' }} onClick={() => { setActiveImportTab(tab); setImportError(''); setImportSuccess(''); setImportFile(null); setImportValidationErrors([]); }}>
                                                 {tab.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
@@ -2318,7 +2326,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                     </div>
 
                                     <div className="card" style={{ maxWidth: '800px', padding: '24px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
                                             <div>
                                                 <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', textTransform: 'capitalize' }}>Import {activeImportTab.replace('_', ' ')}</h4>
                                                 <p style={{ margin: 0, fontSize: '10px', color: '#71717a' }}>Ensure your Excel file follows the exact template structure.</p>
@@ -2494,14 +2502,25 @@ const AdminDashboard = ({ user, setUser }) => {
                                             options={[
                                                 { value: '', label: '🚫 No Manager (None)' },
                                                 ...usersList.filter(u => {
-                                                    if (u.employee_id === userFormData.employee_id) return false;
+                                                    if (u.employee_id && userFormData.employee_id && String(u.employee_id).trim() === String(userFormData.employee_id).trim()) return false;
+                                                    const uDept = (u.department || u.department_name || u.Department || '').toString().trim().toLowerCase();
+                                                    // CXO department users can be reporting manager across any department
+                                                    if (uDept === 'cxo') return true;
+                                                    if (userFormData.reporting_manager && String(u.employee_id).trim() === String(userFormData.reporting_manager).trim()) return true;
                                                     if (userFormData.department) {
-                                                        const uDept = (u.department || u.department_name || u.Department || '').toString().trim().toLowerCase();
                                                         const selDept = userFormData.department.toString().trim().toLowerCase();
                                                         return uDept === selDept;
                                                     }
                                                     return true;
-                                                }).map(u => ({ value: u.employee_id, label: getSolverDetails(u.employee_id) }))
+                                                }).map(u => {
+                                                    const uDept = (u.department || u.department_name || u.Department || '').toString().trim().toLowerCase();
+                                                    const selDept = (userFormData.department || '').toString().trim().toLowerCase();
+                                                    const isCrossCxo = uDept === 'cxo' && selDept !== 'cxo';
+                                                    return {
+                                                        value: u.employee_id,
+                                                        label: `${getSolverDetails(u.employee_id)}${isCrossCxo ? ' [CXO]' : ''}`
+                                                    };
+                                                })
                                             ]}
                                             value={userFormData.reporting_manager || ''}
                                             onChange={(val) => setUserFormData({ ...userFormData, reporting_manager: val })}
@@ -2868,7 +2887,7 @@ const AdminDashboard = ({ user, setUser }) => {
                 />
             )}
             {selectedTicket && (
-                <div style={{
+                <div className="ticket-details-panel slide-in-right-panel" style={{
                     position: 'fixed',
                     top: isSidePanelExpanded ? '2vh' : '52px',
                     bottom: isSidePanelExpanded ? '2vh' : '0',
@@ -2885,8 +2904,8 @@ const AdminDashboard = ({ user, setUser }) => {
                     transition: 'top 0.9s cubic-bezier(0.4, 0, 0.2, 1), right 0.9s cubic-bezier(0.4, 0, 0.2, 1), width 0.9s cubic-bezier(0.4, 0, 0.2, 1), bottom 0.9s cubic-bezier(0.4, 0, 0.2, 1), border-radius 0.9s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.9s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}>
                     <div style={{ padding: '24px 24px 0 24px', zIndex: 10, borderBottom: '1px solid var(--border, #cbd5e1)', background: 'transparent' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div className="side-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <div className="side-panel-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <h3 style={{ margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     #{selectedTicket.ticket_id}
                                     <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 'bold' }}>{selectedTicket.status}</span>
@@ -2987,7 +3006,7 @@ const AdminDashboard = ({ user, setUser }) => {
 
                         {activeDetailsTab === 'details' && (
                             <div style={{ paddingBottom: '20px' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: isSidePanelExpanded ? 'repeat(4, 1fr)' : '1fr 1fr', gap: '14px', fontSize: '13px', color: '#71717a', marginBottom: '16px' }}>
+                                <div className="ticket-info-grid" style={{ display: 'grid', gridTemplateColumns: isSidePanelExpanded ? 'repeat(4, 1fr)' : '1fr 1fr', gap: '14px', fontSize: '13px', color: '#71717a', marginBottom: '16px' }}>
                                     <div><strong style={{ color: 'var(--text-main)' }}>Raised On:</strong> <span style={{ color: '#a1a1aa' }}>{selectedTicket.timestamp?.split(' ')[0]}</span></div>
                                     {selectedTicket.deadline ? <div><strong style={{ color: 'var(--text-main)' }}>Deadline:</strong> <span style={{ color: 'var(--text-muted)' }}>{selectedTicket.deadline?.split(' ')[0]}</span></div> : <div></div>}
                                     <div><strong style={{ color: 'var(--text-main)' }}>Current Raiser:</strong> <span style={{ color: 'var(--text-muted)' }}>{selectedTicket.raiser_name || selectedTicket.raised_by}</span></div>
@@ -3002,7 +3021,7 @@ const AdminDashboard = ({ user, setUser }) => {
                                     {selectedTicket.solved_timestamp && String(selectedTicket.solved_timestamp).toLowerCase() !== 'nan' && selectedTicket.status !== 'Closed' && <div><strong style={{ color: 'var(--text-main)' }}>Resolved On:</strong> <span style={{ color: 'var(--text-muted)' }}>{selectedTicket.solved_timestamp?.split(' ')[0]}</span></div>}
                                     {selectedTicket.closed_timestamp && String(selectedTicket.closed_timestamp).toLowerCase() !== 'nan' && selectedTicket.status === 'Closed' && <div><strong style={{ color: 'var(--text-main)' }}>Closed On:</strong> <span style={{ color: 'var(--text-muted)' }}>{selectedTicket.closed_timestamp?.split(' ')[0]}</span></div>}
                                 </div>
-                                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '20px', position: 'relative', zIndex: 10 }}>
+                                <div className="ticket-desc-attachment-row" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '20px', position: 'relative', zIndex: 10 }}>
                                     <div className="detail-box" style={{ flex: 1, minWidth: 0, fontSize: '13px', padding: '14px', borderRadius: '6px', lineHeight: '1.6', backgroundColor: 'var(--bg-main)', height: selectedTicket.attachment && String(selectedTicket.attachment).toLowerCase() !== 'nan' ? '142px' : 'auto', maxHeight: '142px', overflowY: 'auto' }}>
                                         <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '8px', fontSize: '13px' }}>Issue Description:</strong>
                                         <span style={{ color: '#a1a1aa', whiteSpace: 'pre-wrap', display: 'block', wordBreak: 'break-word' }}>

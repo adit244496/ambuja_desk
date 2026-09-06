@@ -185,7 +185,7 @@ try:
 except ImportError:
     from email_utils import send_ticket_email
 
-def create_notification(emp_id, message, ticket_id=None, role_context='System', action_attachment=None, severity=None, notify_manager=True):
+def create_notification(emp_id, message, ticket_id=None, role_context='System', action_attachment=None, severity=None, notify_manager=True, custom_subject=None):
     db = Session()
     try:
         # Check if recipient is an Admin or Super Admin, or if role_context is Admin - suppress notification completely
@@ -215,9 +215,10 @@ def create_notification(emp_id, message, ticket_id=None, role_context='System', 
                 ticket_id = match.group(1)
         
         # If no severity provided, try to fetch it from the ticket
-        if ticket_id and not severity:
-            ticket = db.query(Ticket).filter(Ticket.ticket_id == str(ticket_id)).first()
-            if ticket:
+        ticket = None
+        if ticket_id:
+            ticket = db.query(Ticket).filter(Ticket.ticket_id == str(ticket_id)).order_by(Ticket.id.desc()).first()
+            if ticket and not severity:
                 severity = ticket.severity
 
         new_notif = Notification(
@@ -239,36 +240,46 @@ def create_notification(emp_id, message, ticket_id=None, role_context='System', 
         elif user and user.email:
             actual_email = user.email
 
+        # Resolve location string for custom subject
+        loc_str = ""
+        if ticket and getattr(ticket, 'location', None) and str(ticket.location).strip() and str(ticket.location).lower() != 'nan':
+            loc_str = f" for {str(ticket.location).strip()}"
+
         # Proceed with email sending if actual_email is resolved
         if actual_email:
             ticket_details = None
             attachment_filepath = None
-            if ticket_id:
-                from flask import current_app
-                ticket = db.query(Ticket).filter(Ticket.ticket_id == str(ticket_id)).order_by(Ticket.id.desc()).first()
-                if ticket:
-                    ticket_details = {
-                        "Ticket ID": ticket.ticket_id,
-                        "Status": ticket.status,
-                        "Description": ticket.description or 'N/A',
-                        "Priority/Escalation": ticket.escalation_level or 'L1',
-                        "Deadline": ticket.deadline or "N/A"
-                    }
-                    if ticket.solver_comments and str(ticket.solver_comments).strip() and str(ticket.solver_comments).lower() != 'nan':
-                        ticket_details["Solver Comments"] = ticket.solver_comments
-                    if action_attachment:
-                        import os
-                        try:
-                            # Attempt to get upload folder from Flask app context
-                            upload_folder = current_app.config['UPLOAD_FOLDER']
-                            attachment_filepath = os.path.join(upload_folder, action_attachment)
-                        except RuntimeError:
-                            # Fallback if no app context
-                            attachment_filepath = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads', action_attachment)
+            if ticket:
+                deadline_val = str(ticket.deadline or 'N/A').strip()
+                if deadline_val and deadline_val.lower() not in ['n/a', 'none', 'nan', '']:
+                    deadline_val = deadline_val.split(' ')[0]
 
-            subject = "Ambuja Desk Notification"
-            if ticket_id:
-                subject += f" - Ticket #{ticket_id}"
+                ticket_details = {
+                    "Ticket ID": ticket.ticket_id,
+                    "Status": ticket.status,
+                    "Description": ticket.description or 'N/A',
+                    "Priority/Escalation": ticket.escalation_level or 'L1',
+                    "Deadline": deadline_val
+                }
+                if ticket.solver_comments and str(ticket.solver_comments).strip() and str(ticket.solver_comments).lower() != 'nan':
+                    ticket_details["Solver Comments"] = ticket.solver_comments
+                if action_attachment:
+                    import os
+                    from flask import current_app
+                    try:
+                        # Attempt to get upload folder from Flask app context
+                        upload_folder = current_app.config['UPLOAD_FOLDER']
+                        attachment_filepath = os.path.join(upload_folder, action_attachment)
+                    except RuntimeError:
+                        # Fallback if no app context
+                        attachment_filepath = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads', action_attachment)
+
+            if custom_subject:
+                subject = custom_subject
+            elif ticket_id:
+                subject = f"Ambuja Desk Notification - Ticket #{ticket_id}{loc_str}"
+            else:
+                subject = "Ambuja Desk Notification"
 
             # Start a background thread to send email so it doesn't block the API
             import threading
@@ -291,8 +302,9 @@ def create_notification(emp_id, message, ticket_id=None, role_context='System', 
                 if mgr and str(mgr.role or '').strip().lower() not in ['admin', 'superadmin', 'super admin']:
                     mgr_target = mgr.email or mgr.employee_id
                     mgr_msg = f"Manager FYI: Your subordinate {user.name or user.email} received an update on Ticket #{ticket_id or ''}:\n{message}"
+                    mgr_subject = f"Manager FYI: Subordinate received an update on Ticket #{ticket_id or ''}{loc_str}"
                     # Call create_notification without recursive manager notification
-                    create_notification(mgr_target, mgr_msg, ticket_id=ticket_id, role_context='Viewer', action_attachment=action_attachment, severity=severity, notify_manager=False)
+                    create_notification(mgr_target, mgr_msg, ticket_id=ticket_id, role_context='Viewer', action_attachment=action_attachment, severity=severity, notify_manager=False, custom_subject=mgr_subject)
 
     except Exception as e:
         print(f"Error creating notification: {e}")
@@ -302,12 +314,12 @@ def get_admin_emails(db):
     # Admins and Super Admins do not receive automated ticket notifications
     return []
 
-def send_omni_blast(emails_to_notify, message, role_context='System'):
+def send_omni_blast(emails_to_notify, message, role_context='System', ticket_id=None, custom_subject=None):
     """Sends a notification to a specific list of emails, ensuring no duplicates."""
     notified = set()
     for email in emails_to_notify:
         if email and email not in notified:
-            create_notification(email, message, role_context=role_context)
+            create_notification(email, message, ticket_id=ticket_id, role_context=role_context, custom_subject=custom_subject)
             notified.add(email)
 
 # ==========================================
@@ -328,10 +340,14 @@ def auto_close_resolved_tickets():
                         t.status = 'Closed'
                         t.closed_timestamp = now.strftime("%d-%m-%Y %H:%M")
                         
+                        loc_str = f" for {t.location.strip()}" if t.location and str(t.location).strip() and str(t.location).lower() != 'nan' else ""
+                        req_sub = f"System Auto-Closed: Ticket #{t.ticket_id} has been Closed{loc_str}"
+                        solv_sub = f"System Auto-Closed: Ticket #{t.ticket_id} has been Closed{loc_str}"
+
                         # LOG & MASS NOTIFY
                         log_ticket_action(t.ticket_id, "SYSTEM", "Auto Closed", "No response in 24 hours")
-                        send_omni_blast([t.raised_by], f"System Auto-Closed: Ticket #{t.ticket_id} has been automatically closed after 24h of inactivity.", role_context='Requestor')
-                        send_omni_blast([t.assigned_to], f"System Auto-Closed: Ticket #{t.ticket_id} (Resolved) was automatically closed.", role_context='Solver')
+                        send_omni_blast([t.raised_by], f"System Auto-Closed: Ticket #{t.ticket_id} has been automatically closed after 24h of inactivity.", role_context='Requestor', ticket_id=t.ticket_id, custom_subject=req_sub)
+                        send_omni_blast([t.assigned_to], f"System Auto-Closed: Ticket #{t.ticket_id} (Resolved) was automatically closed.", role_context='Solver', ticket_id=t.ticket_id, custom_subject=solv_sub)
                 except ValueError:
                     pass
         db.commit()
@@ -348,12 +364,13 @@ def auto_check_sla_breaches():
         
         for t in tickets:
             status = str(t.status).strip().lower()
-            if status in ['closed', 'resolved']:
+            if status in ['closed', 'declined', 'on hold', 'on-hold']:
                 continue
                 
             if t.deadline and not t.sla_notified:
                 try:
                     deadline_time = datetime.strptime(t.deadline, "%d-%m-%Y %H:%M")
+                    loc_str = f" for {t.location.strip()}" if t.location and str(t.location).strip() and str(t.location).lower() != 'nan' else ""
                     
                     if t.timestamp:
                         try:
@@ -371,14 +388,14 @@ def auto_check_sla_breaches():
                                         to_notify = []
                                         if solver.email: to_notify.append(solver.email)
                                         if getattr(solver, 'reporting_manager', None):
-                                            rm_id = solver.reporting_manager
-                                            if '@' not in str(rm_id):
-                                                match = db.query(User).filter_by(employee_id=str(rm_id)).first()
-                                                if match and match.email:
-                                                    to_notify.append(match.email)
-                                            else:
-                                                to_notify.append(rm_id)
-                                        send_omni_blast(to_notify, f"Periodic Reminder (1/3 time elapsed): Ticket #{t.ticket_id} is still open.", role_context='Solver')
+                                             rm_id = solver.reporting_manager
+                                             if '@' not in str(rm_id):
+                                                 match = db.query(User).filter_by(employee_id=str(rm_id)).first()
+                                                 if match and match.email:
+                                                     to_notify.append(match.email)
+                                             else:
+                                                 to_notify.append(rm_id)
+                                        send_omni_blast(to_notify, f"Periodic Reminder (1/3 time elapsed): Ticket #{t.ticket_id} is still open.", role_context='Solver', ticket_id=t.ticket_id, custom_subject=f"Reminder: Ticket #{t.ticket_id} is still open{loc_str}")
                                         log_ticket_action(t.ticket_id, "SYSTEM", "Periodic Notice 1/3", "1/3 time elapsed reminder sent to solver and RM")
                                         
                                 if fraction >= (2/3) and not getattr(t, 'notified_2_3', False):
@@ -388,14 +405,14 @@ def auto_check_sla_breaches():
                                         to_notify = []
                                         if solver.email: to_notify.append(solver.email)
                                         if getattr(solver, 'reporting_manager', None):
-                                            rm_id = solver.reporting_manager
-                                            if '@' not in str(rm_id):
-                                                match = db.query(User).filter_by(employee_id=str(rm_id)).first()
-                                                if match and match.email:
-                                                    to_notify.append(match.email)
-                                            else:
-                                                to_notify.append(rm_id)
-                                        send_omni_blast(to_notify, f"Periodic Reminder (2/3 time elapsed): Ticket #{t.ticket_id} is still open.", role_context='Solver')
+                                             rm_id = solver.reporting_manager
+                                             if '@' not in str(rm_id):
+                                                 match = db.query(User).filter_by(employee_id=str(rm_id)).first()
+                                                 if match and match.email:
+                                                     to_notify.append(match.email)
+                                             else:
+                                                 to_notify.append(rm_id)
+                                        send_omni_blast(to_notify, f"Periodic Reminder (2/3 time elapsed): Ticket #{t.ticket_id} is still open.", role_context='Solver', ticket_id=t.ticket_id, custom_subject=f"Reminder: Ticket #{t.ticket_id} is still open{loc_str}")
                                         log_ticket_action(t.ticket_id, "SYSTEM", "Periodic Notice 2/3", "2/3 time elapsed reminder sent to solver and RM")
                         except ValueError:
                             pass
@@ -432,7 +449,7 @@ def auto_check_sla_breaches():
                             else:
                                 final_emails.append(u)
                                 
-                        send_omni_blast(final_emails, f"URGENT SLA Breach: Ticket #{t.ticket_id} has exceeded its resolution deadline!")
+                        send_omni_blast(final_emails, f"URGENT SLA Breach: Ticket #{t.ticket_id} has exceeded its resolution deadline!", role_context='System', ticket_id=t.ticket_id, custom_subject=f"URGENT SLA Breach: Ticket #{t.ticket_id} exceeded resolution deadline{loc_str}")
                 except ValueError:
                     pass
         db.commit()
@@ -446,20 +463,26 @@ def sync_computed_ticket_metrics():
         now = get_ist_now()
 
         def parse_dt(val):
-            if not val or str(val).strip() in ['nan', 'None', '']:
+            if not val or str(val).strip().lower() in ['nan', 'none', '', 'null']:
                 return None
             val_str = str(val).strip()
             formats = [
                 "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M",
                 "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
                 "%d-%m-%Y", "%Y-%m-%d",
-                "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M"
+                "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M",
+                "%d/%m/%Y", "%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M"
             ]
             for fmt in formats:
                 try:
                     return datetime.strptime(val_str, fmt)
                 except ValueError:
                     pass
+            try:
+                from dateutil import parser
+                return parser.parse(val_str, dayfirst=True)
+            except Exception:
+                pass
             return None
 
         def to_hm(td):
@@ -487,7 +510,8 @@ def sync_computed_ticket_metrics():
             deadline_time = parse_dt(t.deadline)
             
             status = str(t.status).strip().lower()
-            is_globally_finished = status in ['resolved', 'closed']
+            closure_type = str(getattr(t, 'closure_type', '') or '').strip().lower()
+            is_globally_finished = status in ['closed', 'declined', 'on hold', 'on-hold'] or closure_type in ['declined', 'on hold']
             
             if closed_time and is_globally_finished:
                 age_hours = round((closed_time - true_ticket_start).total_seconds() / 3600.0, 2) if true_ticket_start else None
@@ -498,17 +522,22 @@ def sync_computed_ticket_metrics():
             turn_hours = round((closed_time - true_ticket_start).total_seconds() / 3600.0, 2) if (closed_time and true_ticket_start and is_globally_finished) else None
             
             SLA_Breach = False
-            if deadline_time:
-                if closed_time and is_globally_finished and closed_time > deadline_time:
-                    SLA_Breach = True
-                elif (not closed_time or not is_globally_finished) and now > deadline_time:
-                    SLA_Breach = True
-                    
             solver_delay = 0.0
             if deadline_time:
-                finish_t = closed_time or solved_time or now
-                if finish_t > deadline_time:
-                    solver_delay = round((finish_t - deadline_time).total_seconds() / 3600.0, 2)
+                completion_t = closed_time
+                if is_globally_finished:
+                    if not completion_t and t.timestamp:
+                        completion_t = parse_dt(t.timestamp)
+                    if completion_t and completion_t > deadline_time:
+                        SLA_Breach = True
+                        solver_delay = round((completion_t - deadline_time).total_seconds() / 3600.0, 2)
+                    elif getattr(t, 'SLA_Breach', False) in [True, 'True']:
+                        SLA_Breach = True
+                        solver_delay = float(getattr(t, 'solver_delay_hours', 0.0) or 0.0)
+                else:
+                    if now > deadline_time:
+                        SLA_Breach = True
+                        solver_delay = round((now - deadline_time).total_seconds() / 3600.0, 2)
             
             closure_delay = 0.0
             if closed_time and solved_time and closed_time >= solved_time:

@@ -10,7 +10,7 @@ const SLACountdownBadge = ({ deadline, status }) => {
 
     useEffect(() => {
         const calculateRemaining = () => {
-            const isFinished = ['closed', 'resolved', 'declined'].includes(String(status || '').toLowerCase());
+            const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(String(status || '').toLowerCase());
             if (isFinished || !deadline || String(deadline).toLowerCase() === 'nan') {
                 setTimeLeft('');
                 setIsBreached(false);
@@ -21,7 +21,7 @@ const SLACountdownBadge = ({ deadline, status }) => {
             try {
                 let targetDate = null;
                 const str = String(deadline).trim();
-                
+
                 if (str.includes('-') || str.includes('/')) {
                     const parts = str.split(' ');
                     const dateParts = parts[0].split(/-|\//);
@@ -55,8 +55,8 @@ const SLACountdownBadge = ({ deadline, status }) => {
                     const hours = Math.floor(absDiffSec / 3600);
                     const mins = Math.floor((absDiffSec % 3600) / 60);
                     const secs = absDiffSec % 60;
-                    
-                    const timeStr = hours >= 24 
+
+                    const timeStr = hours >= 24
                         ? `-${Math.floor(hours / 24)}d ${String(hours % 24).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
                         : `-${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
@@ -69,7 +69,7 @@ const SLACountdownBadge = ({ deadline, status }) => {
                     const mins = Math.floor((diffSec % 3600) / 60);
                     const secs = diffSec % 60;
 
-                    const timeStr = hours >= 24 
+                    const timeStr = hours >= 24
                         ? `${Math.floor(hours / 24)}d ${String(hours % 24).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
                         : `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
@@ -87,7 +87,7 @@ const SLACountdownBadge = ({ deadline, status }) => {
         return () => clearInterval(interval);
     }, [deadline, status]);
 
-    const isFinished = ['closed', 'resolved', 'declined'].includes(String(status || '').toLowerCase());
+    const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(String(status || '').toLowerCase());
     if (isFinished || !timeLeft) {
         return null;
     }
@@ -103,10 +103,10 @@ const SLACountdownBadge = ({ deadline, status }) => {
         whiteSpace: 'nowrap',
         lineHeight: 1,
         border: '1px solid transparent',
-        backgroundColor: isBreached 
-            ? 'rgba(239, 68, 68, 0.15)' 
-            : isUrgent 
-                ? 'rgba(245, 158, 11, 0.15)' 
+        backgroundColor: isBreached
+            ? 'rgba(239, 68, 68, 0.15)'
+            : isUrgent
+                ? 'rgba(245, 158, 11, 0.15)'
                 : 'rgba(16, 185, 129, 0.15)',
         color: isBreached ? '#ef4444' : isUrgent ? '#f59e0b' : '#10b981',
         borderColor: isBreached ? 'rgba(239, 68, 68, 0.3)' : isUrgent ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'

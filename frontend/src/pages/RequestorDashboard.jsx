@@ -6,7 +6,8 @@ import { Paperclip, AlertCircle, CheckCircle2, Filter, MessageSquare, PlusCircle
 import DocumentPreview from '../components/DocumentPreview';
 import AttachmentBadge from '../components/AttachmentBadge';
 import SLACountdownBadge from '../components/SLACountdownBadge';
-import { getISTDate, getISTMinDatetime, getISTTomorrowDate } from '../utils/dateUtils';
+import SLABreachModeToggle from '../components/SLABreachModeToggle';
+import { getISTDate, getISTMinDatetime, getISTTomorrowDate, parseDateString } from '../utils/dateUtils';
 
 // --- COLLAPSIBLE TIMELINE NODE ---
 const CollapsibleTimelineNode = ({ log, iconColor, Icon, toName, onPreview }) => {
@@ -325,6 +326,7 @@ const RequestorDashboard = ({ user, setUser }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [showKPIs, setShowKPIs] = useState(true);
+    const [slaBreachMode, setSlaBreachMode] = useState('active'); // 'active' (Live / Active Breach) or 'all' (All-Time SLA Breach)
 
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [panelTicket, setPanelTicket] = useState(null);
@@ -795,8 +797,13 @@ const RequestorDashboard = ({ user, setUser }) => {
         }
     }
 
-    // Sort descending by ID so newest tickets are at the top
-    myRequests.sort((a, b) => b.ticket_id - a.ticket_id);
+    // Sort: Resolved tickets at the top (action required by raiser), then descending by ticket ID
+    myRequests.sort((a, b) => {
+        const aResolved = String(a.status || '').toLowerCase() === 'resolved' ? 1 : 0;
+        const bResolved = String(b.status || '').toLowerCase() === 'resolved' ? 1 : 0;
+        if (aResolved !== bResolved) return bResolved - aResolved;
+        return Number(b.ticket_id) - Number(a.ticket_id);
+    });
 
     const filteredRequests = myRequests.filter(t => {
         const q = searchQuery.toLowerCase();
@@ -828,7 +835,7 @@ const RequestorDashboard = ({ user, setUser }) => {
 
     const uniqueDepts = (Array.isArray(departments) && departments.length > 0) ? departments.map(d => d.department) : [...new Set((usersList || []).map(u => u.department).filter(Boolean))];
     const uniqueIssueCats = [...new Set((Array.isArray(issueCategoriesList) ? issueCategoriesList : []).map(i => i.issue_category).filter(Boolean))];
-    const uniqueActivityCats = [...new Set((Array.isArray(activityCategoriesList) ? activityCategoriesList : []).map(i => i.activity_category).filter(Boolean))];
+    const uniqueActivityCats = [...new Set((Array.isArray(activityCategoriesList) ? activityCategoriesList : []).map(a => a.activity_category).filter(Boolean))];
     const locationOptions = locations.map(l => l.location);
     const assignableUsers = usersList.filter(u => (!dept || (u.department || '').trim().toLowerCase() === (dept || '').trim().toLowerCase()) && String(u.role).toLowerCase() !== 'viewer' && String(u.employee_id) !== String(user.employee_id)).map(u => ({ label: getSolverDetails(u.employee_id), value: u.employee_id }));
     const notifiableUsers = usersList.map(u => u.email);
@@ -842,20 +849,33 @@ const RequestorDashboard = ({ user, setUser }) => {
     // =========================================================================
     // GLOBAL KPI ENGINE (PINNED TO TOP OF ALL TABS)
     // =========================================================================
-    const isLate = (ticket) => {
-        if (!ticket.deadline || ticket.status === 'Closed' || ticket.status === 'Resolved') return false;
-        try {
-            const [datePart, timePart] = ticket.deadline.split(' ');
-            const dateParts = datePart.includes('-') ? datePart.split('-') : datePart.split('/');
-            let day, month, year;
-            if (dateParts[0].length === 4) {
-                [year, month, day] = dateParts;
-            } else {
-                [day, month, year] = dateParts;
+    const isLate = (ticket, targetMode = slaBreachMode) => {
+        if (!ticket) return false;
+        if (ticket.solver_delay_hours !== undefined && ticket.solver_delay_hours !== null && Number(ticket.solver_delay_hours) > 0) return true;
+        if (!ticket.deadline || String(ticket.deadline).toLowerCase() === 'nan') return false;
+
+        const deadlineDate = parseDateString(ticket.deadline);
+        if (!deadlineDate) return false;
+
+        const st = String(ticket.status || '').toLowerCase();
+        const ct = String(ticket.closure_type || '').toLowerCase();
+        const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+
+        if (targetMode === 'active') {
+            if (isFinished) return false;
+            return getISTDate() > deadlineDate;
+        }
+
+        if (isFinished) {
+            const finishStr = ticket.solved_timestamp || ticket.closed_timestamp;
+            if (finishStr && String(finishStr).toLowerCase() !== 'nan') {
+                const finishDate = parseDateString(finishStr);
+                if (finishDate) return finishDate > deadlineDate;
             }
-            const [hour, minute] = timePart ? timePart.split(':') : [0, 0];
-            return new Date(year, month - 1, day, hour, minute) < new Date();
-        } catch (err) { return false; }
+            return ticket.SLA_Breach === true || ticket.SLA_Breach === 'True';
+        }
+
+        return getISTDate() > deadlineDate;
     };
 
     const requestorKPI = useMemo(() => {
@@ -897,11 +917,11 @@ const RequestorDashboard = ({ user, setUser }) => {
             else if (stat === 'on hold') increment('onHold', lvl);
             else if (stat === 'escalate' || stat === 'escalated') increment('escalated', lvl);
 
-            if (isLate(t) || t.SLA_Breach === 'True' || t.SLA_Breach === true) increment('late', lvl);
+            if (isLate(t, slaBreachMode)) increment('late', lvl);
         });
 
         return counts;
-    }, [filteredRequests]);
+    }, [filteredRequests, slaBreachMode]);
 
     const renderTooltip = (levelsObj) => {
         const entries = Object.entries(levelsObj).sort();
@@ -940,45 +960,69 @@ const RequestorDashboard = ({ user, setUser }) => {
                         {ticketList.length === 0 ? (
                             <tr><td colSpan="10" className="text-center p-4 text-muted">No tickets found.</td></tr>
                         ) : (
-                            ticketList.slice().reverse().map(t => (
-                                <tr
-                                    key={`${t.ticket_id}-${t.escalation_level || 'L1'}`}
-                                    className="clickable"
-                                    onClick={() => handleTicketClick(t)}
-                                    style={{ borderLeft: t.status !== 'Closed' && t.status !== 'Resolved' ? '2px solid #ef4444' : '2px solid transparent' }}
-                                >
-                                    <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }} className="font-bold">
-                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
-                                            <span style={{ color: (isLate(t) || t.SLA_Breach === 'True' || t.SLA_Breach === true) ? '#ef4444' : 'inherit' }}>#{t.ticket_id}</span>
-                                            {t.original_raiser && t.raised_by === user.employee_id && <span style={{ color: '#f59e0b', fontSize: '8px', fontWeight: 'normal', backgroundColor: 'rgba(245,158,11,0.1)', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap', display: 'inline-block' }}>L{t.escalation_level ? String(t.escalation_level).replace('L', '') : '1'} Sub-task</span>}
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                                        <AttachmentBadge attachment={t.attachment} />
-                                    </td>
-                                    <td style={{ padding: '12px 8px' }}>{t.dept_assigned}</td>
-                                    <td style={{ padding: '12px 8px' }}>{t.issue_category}</td>
-                                    <td style={{ padding: '12px 8px' }}>{t.activity_category || '-'}</td>
-                                    <td style={{ padding: '12px 8px', maxWidth: '200px', minWidth: '150px' }} title={t.description || ''}>
-                                        <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.4', wordBreak: 'break-word', fontSize: '10.5px', color: '#a1a1aa' }}>
-                                            {t.description || '-'}
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '12px 8px' }}>{t.location}</td>
-                                    <td style={{ padding: '12px 8px' }} className="text-primary">{getSolverDetails(t.assigned_to) || '-'}</td>
-                                    <td style={{ padding: '12px 8px' }}>{t.severity || '-'}</td>
-                                    <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                            <span style={{
-                                                backgroundColor: t.status === 'Escalated' ? 'rgba(239, 68, 68, 0.1)' : t.status === 'Closed' ? '#27272a' : t.status === 'Resolved' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)',
-                                                color: t.status === 'Escalated' ? '#ef4444' : t.status === 'Closed' ? '#a1a1aa' : t.status === 'Resolved' ? '#10b981' : '#60a5fa',
-                                                padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold'
-                                            }}>{t.status}</span>
-                                            <SLACountdownBadge deadline={t.deadline} status={t.status} />
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
+                            ticketList.map(t => {
+                                const isResolved = String(t.status || '').toLowerCase() === 'resolved';
+                                return (
+                                    <tr
+                                        key={`${t.ticket_id}-${t.escalation_level || 'L1'}`}
+                                        className="clickable"
+                                        onClick={() => handleTicketClick(t)}
+                                        style={{
+                                            borderLeft: isResolved ? '4px solid #10b981' : (t.status !== 'Closed' ? '2px solid #ef4444' : '2px solid transparent'),
+                                            backgroundColor: isResolved ? 'rgba(16, 185, 129, 0.04)' : undefined
+                                        }}
+                                    >
+                                        <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }} className="font-bold">
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                                                <span style={{ color: (isLate(t) || t.SLA_Breach === 'True' || t.SLA_Breach === true) ? '#ef4444' : 'inherit' }}>#{t.ticket_id}</span>
+                                                {t.original_raiser && t.raised_by === user.employee_id && <span style={{ color: '#f59e0b', fontSize: '8px', fontWeight: 'normal', backgroundColor: 'rgba(245,158,11,0.1)', padding: '2px 4px', borderRadius: '4px', whiteSpace: 'nowrap', display: 'inline-block' }}>L{t.escalation_level ? String(t.escalation_level).replace('L', '') : '1'} Sub-task</span>}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                                            <AttachmentBadge attachment={t.attachment} />
+                                        </td>
+                                        <td style={{ padding: '12px 8px' }}>{t.dept_assigned}</td>
+                                        <td style={{ padding: '12px 8px' }}>{t.issue_category}</td>
+                                        <td style={{ padding: '12px 8px' }}>{t.activity_category || '-'}</td>
+                                        <td style={{ padding: '12px 8px', maxWidth: '200px', minWidth: '150px' }} title={t.description || ''}>
+                                            <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.4', wordBreak: 'break-word', fontSize: '10.5px', color: '#a1a1aa' }}>
+                                                {t.description || '-'}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '12px 8px' }}>{t.location}</td>
+                                        <td style={{ padding: '12px 8px' }} className="text-primary">{getSolverDetails(t.assigned_to) || '-'}</td>
+                                        <td style={{ padding: '12px 8px' }}>{t.severity || '-'}</td>
+                                        <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                                <span style={{
+                                                    backgroundColor: t.status === 'Escalated' ? 'rgba(239, 68, 68, 0.1)' : t.status === 'Closed' ? '#27272a' : t.status === 'Resolved' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.1)',
+                                                    color: t.status === 'Escalated' ? '#ef4444' : t.status === 'Closed' ? '#a1a1aa' : t.status === 'Resolved' ? '#10b981' : '#60a5fa',
+                                                    border: isResolved ? '1px solid rgba(16, 185, 129, 0.4)' : 'none',
+                                                    padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold'
+                                                }}>{t.status}</span>
+                                                {isResolved && (
+                                                    <span style={{
+                                                        fontSize: '8.5px',
+                                                        fontWeight: '700',
+                                                        color: '#f59e0b',
+                                                        backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                                                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                                                        padding: '2px 5px',
+                                                        borderRadius: '4px',
+                                                        whiteSpace: 'nowrap',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '3px'
+                                                    }}>
+                                                        🔔 Action: Close/Reopen
+                                                    </span>
+                                                )}
+                                                <SLACountdownBadge deadline={t.deadline} status={t.status} />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })
                         )}
                     </tbody>
                 </table>
@@ -1002,6 +1046,7 @@ const RequestorDashboard = ({ user, setUser }) => {
                             <Activity size={22} color="#3b82f6" /> My Dashboard
                         </h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <SLABreachModeToggle mode={slaBreachMode} onChange={setSlaBreachMode} />
                             <button
                                 className="btn p-2 text-xs flex-row gap-1"
                                 onClick={() => setShowKPIs(prev => !prev)}
@@ -1076,7 +1121,9 @@ const RequestorDashboard = ({ user, setUser }) => {
                         </div>
                         <div className="card kpi-card kpi-sla kpi-orange" style={{ padding: '8px 4px', margin: 0, textAlign: 'center', borderTop: '2px solid #F7941D', background: 'linear-gradient(180deg, rgba(247,148,29,0.25) 0%, rgba(247,148,29,0) 100%)' }}>
                             {renderTooltip(requestorKPI.late.levels)}
-                            <p style={{ color: '#a1a1aa', fontSize: '9px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 2px 0' }}>SLA Breach</p>
+                            <p style={{ color: '#a1a1aa', fontSize: '9px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 2px 0' }}>
+                                {slaBreachMode === 'all' ? 'All-Time SLA Breach' : 'Live SLA Breach'}
+                            </p>
                             <h2 style={{ fontSize: '17px', margin: 0, color: '#fff' }}>{requestorKPI.late.count}</h2>
                         </div>
                     </div>
@@ -1256,7 +1303,7 @@ const RequestorDashboard = ({ user, setUser }) => {
                                                             if (smartSuggestions.activity_category) setActivityCat(smartSuggestions.activity_category);
                                                             if (smartSuggestions.assigned_to) setAssignedTo(smartSuggestions.assigned_to);
                                                             if (smartSuggestions.deadline_hours) {
-                                                                const targetDate = new Date();
+                                                                const targetDate = getISTDate();
                                                                 targetDate.setHours(targetDate.getHours() + Math.round(smartSuggestions.deadline_hours));
                                                                 const yyyy = targetDate.getFullYear();
                                                                 const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
@@ -1291,7 +1338,7 @@ const RequestorDashboard = ({ user, setUser }) => {
                                                         {smartSuggestions.deadline_hours && (
                                                             <span
                                                                 onClick={() => {
-                                                                    const targetDate = new Date();
+                                                                    const targetDate = getISTDate();
                                                                     targetDate.setHours(targetDate.getHours() + Math.round(smartSuggestions.deadline_hours));
                                                                     const yyyy = targetDate.getFullYear();
                                                                     const mm = String(targetDate.getMonth() + 1).padStart(2, '0');

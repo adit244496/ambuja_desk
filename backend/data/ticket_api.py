@@ -11,18 +11,24 @@ from models import Ticket, TicketLog, User, Department, IssueCategory, ActivityC
 def parse_flexible_dt(val):
     if not val: return None
     val_str = str(val).strip()
-    if val_str.lower() in ['nan', 'none', '']: return None
+    if val_str.lower() in ['nan', 'none', '', 'null']: return None
     formats = [
         "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M",
         "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
         "%d-%m-%Y", "%Y-%m-%d",
-        "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M"
+        "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M",
+        "%d/%m/%Y", "%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M"
     ]
     for fmt in formats:
         try:
             return datetime.strptime(val_str, fmt)
         except ValueError:
             pass
+    try:
+        from dateutil import parser
+        return parser.parse(val_str, dayfirst=True)
+    except Exception:
+        pass
     return None
 
 ticket_bp = Blueprint('ticket', __name__)
@@ -199,6 +205,9 @@ def get_tickets():
             if 'original_raiser' in r:
                 r['original_raiser_name'] = get_user_display(r.get('original_raiser'), users)
                 
+            he = str(r.get('has_extended') or '').strip().lower()
+            r['has_extended'] = True if he in ['true', '1', 'yes'] else False
+                
         return jsonify(records), 200
     finally:
         db.close()
@@ -353,24 +362,27 @@ def create_ticket():
         raised_by_email = get_user_email(raised_by, users)
         assigned_solver_email = get_user_email(assigned_solver_emp_id, users)
         
+        loc_val = str(data.get('location') or '').strip()
+        loc_suffix = f" for {loc_val}" if loc_val and loc_val.lower() != 'nan' else ""
+
         database.log_ticket_action(new_tid, raised_by, "Created Ticket", f"Assigned to {assigned_solver_email or assigned_solver_emp_id}", description, attachment=filename)
         
         if raised_by_email:
-            database.create_notification(raised_by_email, f"Success: Your Ticket #{new_tid} has been raised.", ticket_id=new_tid, role_context='Requestor', action_attachment=filename)
+            database.create_notification(raised_by_email, f"Success: Your Ticket #{new_tid} has been raised.", ticket_id=new_tid, role_context='Requestor', action_attachment=filename, custom_subject=f"Confirmation: Your Ticket #{new_tid} has been raised{loc_suffix}")
         if assigned_solver_email:
-            database.create_notification(assigned_solver_email, f"Action Required: Ticket #{new_tid} was assigned to you by {get_user_name_dept(raised_by, users)}.", ticket_id=new_tid, role_context='Solver', action_attachment=filename)
+            database.create_notification(assigned_solver_email, f"Action Required: Ticket #{new_tid} was assigned to you by {get_user_name_dept(raised_by, users)}.", ticket_id=new_tid, role_context='Solver', action_attachment=filename, custom_subject=f"Action Required: New Ticket #{new_tid} assigned to you{loc_suffix}")
             
         admin_emails = database.get_admin_emails(db)
         for admin_email in admin_emails:
             if admin_email != assigned_solver_email and admin_email != raised_by_email:
-                database.create_notification(admin_email, f"Alert: Ticket #{new_tid} was raised by {get_user_name_dept(raised_by, users)} and assigned to {get_user_name_dept(assigned_solver_emp_id or assigned_solver, users)}.", ticket_id=new_tid, role_context='Admin', action_attachment=filename)
+                database.create_notification(admin_email, f"Alert: Ticket #{new_tid} was raised by {get_user_name_dept(raised_by, users)} and assigned to {get_user_name_dept(assigned_solver_emp_id or assigned_solver, users)}.", ticket_id=new_tid, role_context='Admin', action_attachment=filename, custom_subject=f"Alert: New Ticket #{new_tid} raised{loc_suffix}")
 
         if notify_users:
             cc_list = [u.strip() for u in notify_users.split(',') if u.strip()]
             for u in cc_list:
                 u_email = get_user_email(u, users)
                 if u_email:
-                    database.create_notification(u_email, f"FYI: You were CC'd on Ticket #{new_tid} raised by {get_user_name_dept(raised_by, users)} and assigned to {get_user_name_dept(assigned_solver_emp_id or assigned_solver, users)}.", ticket_id=new_tid, role_context='Viewer', action_attachment=filename)
+                    database.create_notification(u_email, f"FYI: You were CC'd on Ticket #{new_tid} raised by {get_user_name_dept(raised_by, users)} and assigned to {get_user_name_dept(assigned_solver_emp_id or assigned_solver, users)}.", ticket_id=new_tid, role_context='Viewer', action_attachment=filename, custom_subject=f"FYI: You were CC'd on new Ticket #{new_tid}{loc_suffix}")
         
         return jsonify({
             "message": "Ticket created successfully", 
@@ -392,7 +404,6 @@ def escalate_ticket():
     new_dept = data.get('new_dept')
     new_solver = data.get('new_solver')
     reason = data.get('reason', '')
-    new_deadline = data.get('new_deadline', '')
     
     filename = ""
     file = request.files.get('attachment') if not request.is_json else None
@@ -441,19 +452,6 @@ def escalate_ticket():
             absolute_deadline = str(ticket.deadline)
             
         final_deadline = str(ticket.deadline)
-        if new_deadline:
-            try:
-                from dateutil import parser
-                dt_new = parser.parse(new_deadline, dayfirst=True)
-                # If parser defaulted time to 00:00 (date-only input), force 23:59
-                if dt_new.hour == 0 and dt_new.minute == 0:
-                    dt_new = dt_new.replace(hour=23, minute=59)
-                formatted_deadline = dt_new.strftime("%d-%m-%Y %H:%M")
-                final_deadline = formatted_deadline
-                new_deadline = formatted_deadline
-            except Exception:
-                pass
-                
         new_solver_emp_id = str(new_solver).strip()
         
         # Prevent escalation to raisers or solvers across all previous levels
@@ -477,6 +475,7 @@ def escalate_ticket():
             timestamp=database.get_ist_now_str("%d-%m-%Y %H:%M"),
             deadline=final_deadline,
             absolute_deadline=absolute_deadline,
+            has_extended='false',
             description=reason if reason else ticket.description,
             attachment=filename if filename else '',
             issue_category=ticket.issue_category,
@@ -503,20 +502,25 @@ def escalate_ticket():
         new_solver_email = get_user_email(new_solver_emp_id, users)
         requestor = get_user_email(orig_raiser, users) or orig_raiser
     
+        loc_val = str(ticket.location or '').strip()
+        loc_suffix = f" for {loc_val}" if loc_val and loc_val.lower() != 'nan' else ""
+
         if new_solver_email:
-            database.create_notification(new_solver_email, f"Action Required: Ticket #{ticket_id} has been escalated to you by {get_user_name_dept(current_solver, users)}.", role_context='Solver', action_attachment=filename)
+            database.create_notification(new_solver_email, f"Action Required: Ticket #{ticket_id} has been escalated to you by {get_user_name_dept(current_solver, users)}.", ticket_id=ticket_id, role_context='Solver', action_attachment=filename, custom_subject=f"Action Required: Ticket #{ticket_id} has been Escalated to you{loc_suffix}")
+        if current_solver_email:
+            database.create_notification(current_solver_email, f"Confirmation: Ticket #{ticket_id} escalated to {get_user_name_dept(new_solver, users)}.", ticket_id=ticket_id, role_context='Solver', action_attachment=filename, custom_subject=f"Confirmation: Ticket #{ticket_id} escalated to {get_user_name_dept(new_solver, users)}{loc_suffix}")
         if requestor:
-            database.create_notification(requestor, f"Update: Your Ticket #{ticket_id} has been escalated to {get_user_name_dept(new_solver, users)}.", role_context='Requestor', action_attachment=filename)
+            database.create_notification(requestor, f"Update: Your Ticket #{ticket_id} has been escalated to {get_user_name_dept(new_solver, users)}.", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename, custom_subject=f"Update: Ticket #{ticket_id} has been Escalated{loc_suffix}")
         
         admin_emails = database.get_admin_emails(db)
         for admin_email in admin_emails:
-            database.create_notification(admin_email, f"Escalation Alert: Ticket #{ticket_id} was escalated by {get_user_name_dept(current_solver, users)} to {get_user_name_dept(new_solver, users)}.", role_context='Admin', action_attachment=filename)
+            database.create_notification(admin_email, f"Escalation Alert: Ticket #{ticket_id} was escalated by {get_user_name_dept(current_solver, users)} to {get_user_name_dept(new_solver, users)}.", ticket_id=ticket_id, role_context='Admin', action_attachment=filename, custom_subject=f"Escalation Alert: Ticket #{ticket_id} was Escalated{loc_suffix}")
             
         if cc_users_str and cc_users_str.lower() not in ['nan', 'none', '']:
             for u in [u.strip() for u in cc_users_str.split(',') if u.strip()]:
                 u_email = get_user_email(u, users)
                 if u_email:
-                    database.create_notification(u_email, f"FYI: Ticket #{ticket_id} (CC'd) was escalated to {get_user_name_dept(new_solver, users)}.", role_context='Viewer', action_attachment=filename)
+                    database.create_notification(u_email, f"FYI: Ticket #{ticket_id} (CC'd) was escalated to {get_user_name_dept(new_solver, users)}.", ticket_id=ticket_id, role_context='Viewer', action_attachment=filename, custom_subject=f"FYI: Ticket #{ticket_id} was Escalated{loc_suffix}")
         
         return jsonify({"message": "Ticket escalated successfully"}), 200
     finally:
@@ -553,9 +557,27 @@ def accept_escalation():
         
         database.log_ticket_action(ticket_id, parent_solver, "Resolution Accepted", f"Accepted resolution from {child_lvl}. Back in {parent_lvl} active queue.", remarks)
         
+        loc_val = str(p_ticket.location or c_ticket.location or '').strip()
+        loc_paren = f" ({loc_val})" if loc_val and loc_val.lower() != 'nan' else ""
+
         c_email = get_user_email(child_solver, users)
         if c_email:
-            database.create_notification(c_email, f"Success: Your resolution for Ticket #{ticket_id} was accepted by {get_user_name_dept(parent_lvl, users)}.", role_context='Solver')
+            database.create_notification(c_email, f"Success: Your resolution for Ticket #{ticket_id} was accepted by {get_user_name_dept(parent_lvl, users)}.\n\nRemarks: {remarks}", ticket_id=ticket_id, role_context='Solver', custom_subject=f"Success: Your resolution for Ticket #{ticket_id} was Accepted by {get_user_name_dept(parent_lvl, users)}{loc_paren}")
+            
+        p_email = get_user_email(parent_solver, users)
+        if p_email:
+            database.create_notification(p_email, f"Confirmation: You accepted the resolution for Ticket #{ticket_id} from {child_lvl}.", ticket_id=ticket_id, role_context='Solver', custom_subject=f"Confirmation: Accepted escalation resolution for Ticket #{ticket_id}{loc_paren}")
+
+        req_email = get_user_email(p_ticket.raised_by, users)
+        if req_email:
+            database.create_notification(req_email, f"Update: Escalation resolution for your Ticket #{ticket_id} was accepted by {get_user_name_dept(parent_solver, users)} and is back in active progress.", ticket_id=ticket_id, role_context='Requestor', custom_subject=f"Update: Escalation resolution accepted for Ticket #{ticket_id}{loc_paren}")
+
+        cc_users_str = str(p_ticket.notify_users or c_ticket.notify_users or '')
+        if cc_users_str and cc_users_str.lower() not in ['nan', 'none', '']:
+            for u in [u.strip() for u in cc_users_str.split(',') if u.strip()]:
+                u_email = get_user_email(u, users)
+                if u_email:
+                    database.create_notification(u_email, f"FYI: Escalation resolution for Ticket #{ticket_id} was accepted by {get_user_name_dept(parent_solver, users)}.", ticket_id=ticket_id, role_context='Viewer', custom_subject=f"FYI: Escalation resolution accepted for Ticket #{ticket_id}{loc_paren}")
             
         db.commit()
         return jsonify({"message": "Escalation accepted"}), 200
@@ -591,9 +613,27 @@ def reject_escalation():
         
         database.log_ticket_action(ticket_id, parent_solver, "Resolution Rejected", f"Rejected resolution from {child_lvl}. Ticket returned to {child_lvl}.", remarks)
         
+        loc_val = str(p_ticket.location or c_ticket.location or '').strip()
+        loc_paren = f" ({loc_val})" if loc_val and loc_val.lower() != 'nan' else ""
+
         c_email = get_user_email(child_solver, users)
         if c_email:
-            database.create_notification(c_email, f"Action Required: Your resolution for Ticket #{ticket_id} was REJECTED by {get_user_name_dept(parent_lvl, users)}", role_context='Solver')
+            database.create_notification(c_email, f"Action Required: Your resolution for Ticket #{ticket_id} was REJECTED by {get_user_name_dept(parent_lvl, users)} and returned to you.\n\nRemarks: {remarks}", ticket_id=ticket_id, role_context='Solver', custom_subject=f"Action Required: Escalation for Ticket #{ticket_id} was Reopened & Returned to you{loc_paren}")
+            
+        p_email = get_user_email(parent_solver, users)
+        if p_email:
+            database.create_notification(p_email, f"Confirmation: Escalation for Ticket #{ticket_id} was returned to {child_lvl}.", ticket_id=ticket_id, role_context='Solver', custom_subject=f"Confirmation: Escalation for Ticket #{ticket_id} returned to {child_lvl}{loc_paren}")
+
+        req_email = get_user_email(p_ticket.raised_by, users)
+        if req_email:
+            database.create_notification(req_email, f"Update: Escalation for Ticket #{ticket_id} was returned to {child_lvl} for further work.\n\nRemarks: {remarks}", ticket_id=ticket_id, role_context='Requestor', custom_subject=f"Update: Escalation for Ticket #{ticket_id} returned for further work{loc_paren}")
+
+        cc_users_str = str(p_ticket.notify_users or c_ticket.notify_users or '')
+        if cc_users_str and cc_users_str.lower() not in ['nan', 'none', '']:
+            for u in [u.strip() for u in cc_users_str.split(',') if u.strip()]:
+                u_email = get_user_email(u, users)
+                if u_email:
+                    database.create_notification(u_email, f"FYI: Escalation for Ticket #{ticket_id} was returned to {child_lvl} for further work.", ticket_id=ticket_id, role_context='Viewer', custom_subject=f"FYI: Escalation for Ticket #{ticket_id} returned for further work{loc_paren}")
             
         db.commit()
         return jsonify({"message": "Escalation rejected"}), 200
@@ -641,12 +681,39 @@ def update_ticket_status():
         if ticket.reassign_requested_to and str(ticket.reassign_requested_to).strip() and str(ticket.reassign_requested_to).lower() not in ['nan', 'none', '']:
             return jsonify({"error": "Ticket is non-actionable as a handover request is pending Admin approval."}), 400
                 
+        original_ticket_status = str(ticket.status or '').strip()
         requestor_raw = str(ticket.raised_by)
         solver_raw = str(ticket.assigned_to)
         
+        # Check authorization if caller identifier is provided
+        caller_email = str(data.get('user_email') or '').strip().lower()
+        caller_emp_id = str(data.get('user_emp_id') or '').strip().lower()
+        caller_role = str(data.get('user_role') or '').strip().lower()
+        
+        if caller_email or caller_emp_id:
+            assigned_emp = str(ticket.assigned_to or '').strip().lower()
+            assigned_email = str(get_user_email(ticket.assigned_to, users) or '').strip().lower()
+            raiser_emp = str(ticket.raised_by or '').strip().lower()
+            raiser_email = str(get_user_email(ticket.raised_by, users) or '').strip().lower()
+            orig_raiser_emp = str(ticket.original_raiser or '').strip().lower()
+            orig_raiser_email = str(get_user_email(ticket.original_raiser, users) or '').strip().lower()
+
+            is_assigned_solver = (caller_emp_id and caller_emp_id == assigned_emp) or (caller_email and caller_email == assigned_email)
+            is_raiser = (caller_emp_id and (caller_emp_id == raiser_emp or caller_emp_id == orig_raiser_emp)) or (caller_email and (caller_email == raiser_email or caller_email == orig_raiser_email))
+            is_admin = caller_role in ['admin', 'superadmin', 'super admin']
+
+            if not is_admin:
+                if new_status in ['Closed', 'Reopened']:
+                    if not is_raiser and not is_assigned_solver:
+                        return jsonify({"error": "Unauthorized: Only the ticket raiser or admin can close/reopen this ticket."}), 403
+                else:
+                    if not is_assigned_solver:
+                        return jsonify({"error": "Unauthorized: Only the assigned solver of this escalation level can update its status."}), 403
+
         requestor_email = get_user_email(requestor_raw, users)
         solver_email = get_user_email(solver_raw, users)
         
+        curr_lvl = str(ticket.escalation_level or 'L1').strip()
         action_by = requestor_raw if new_status in ['Closed', 'Reopened'] else solver_raw
         actual_status = new_status
         
@@ -678,6 +745,10 @@ def update_ticket_status():
                     Ticket.escalation_level == parent_lvl
                 ).order_by(Ticket.id.desc()).first()
                 
+                loc_val = str(ticket.location or p_ticket.location if p_ticket else '').strip()
+                loc_paren = f" ({loc_val})" if loc_val and loc_val.lower() != 'nan' else ""
+                loc_suffix = f" for {loc_val}" if loc_val and loc_val.lower() != 'nan' else ""
+
                 if p_ticket:
                     p_ticket.status = 'In Progress'
                     p_ticket.closure_type = ''
@@ -689,7 +760,19 @@ def update_ticket_status():
                     parent_solver = str(p_ticket.assigned_to)
                     p_email = get_user_email(parent_solver, users)
                     if p_email:
-                        database.create_notification(p_email, f"Action Required: Escalation for Ticket #{ticket_id} was put on hold. It has been returned to you.\n\nRemarks: {remarks}", role_context='Solver', action_attachment=filename)
+                        database.create_notification(p_email, f"Action Required: Escalation for Ticket #{ticket_id} was put on hold. It has been returned to you.\n\nRemarks: {remarks}", ticket_id=ticket_id, role_context='Solver', action_attachment=filename, custom_subject=f"Action Required: Escalation for Ticket #{ticket_id} Put On Hold - Returned to you{loc_paren}")
+                    
+                    req_email = get_user_email(ticket.raised_by or p_ticket.raised_by, users)
+                    if req_email:
+                        database.create_notification(req_email, f"Notice: Escalation for Ticket #{ticket_id} was placed on hold by specialist ({curr_lvl}).\n\nRemarks: {remarks}", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename, custom_subject=f"Notice: Escalation for Ticket #{ticket_id} Put On Hold by specialist{loc_paren}")
+
+                    esc_cc = str(ticket.notify_users or p_ticket.notify_users or '')
+                    if esc_cc and esc_cc.lower() not in ['nan', 'none', '']:
+                        for u in [u.strip() for u in esc_cc.split(',') if u.strip()]:
+                            u_email = get_user_email(u, users)
+                            if u_email:
+                                database.create_notification(u_email, f"Notice: Escalation for Ticket #{ticket_id} was placed on hold by {curr_lvl}.", ticket_id=ticket_id, role_context='Viewer', action_attachment=filename, custom_subject=f"Notice: Escalation for Ticket #{ticket_id} Put On Hold{loc_paren}")
+
                     ticket.status = actual_status
                     database.log_ticket_action(ticket_id, solver_raw, action_name, f"Returned to {parent_lvl} solver")
                 else:
@@ -718,6 +801,10 @@ def update_ticket_status():
                     Ticket.escalation_level == parent_lvl
                 ).order_by(Ticket.id.desc()).first()
                 
+                loc_val = str(ticket.location or p_ticket.location if p_ticket else '').strip()
+                loc_paren = f" ({loc_val})" if loc_val and loc_val.lower() != 'nan' else ""
+                loc_suffix = f" for {loc_val}" if loc_val and loc_val.lower() != 'nan' else ""
+
                 if p_ticket:
                     p_ticket.status = 'In Progress'
                     p_ticket.closure_type = ''
@@ -729,7 +816,19 @@ def update_ticket_status():
                     parent_solver = str(p_ticket.assigned_to)
                     p_email = get_user_email(parent_solver, users)
                     if p_email:
-                        database.create_notification(p_email, f"Action Required: Escalation for Ticket #{ticket_id} was declined. It has been returned to you.\n\nRemarks: {remarks}", role_context='Solver', action_attachment=filename)
+                        database.create_notification(p_email, f"Action Required: Escalation for Ticket #{ticket_id} was declined. It has been returned to you.\n\nRemarks: {remarks}", ticket_id=ticket_id, role_context='Solver', action_attachment=filename, custom_subject=f"Action Required: Escalation for Ticket #{ticket_id} Declined - Returned to you{loc_paren}")
+
+                    req_email = get_user_email(ticket.raised_by or p_ticket.raised_by, users)
+                    if req_email:
+                        database.create_notification(req_email, f"Notice: Escalation for Ticket #{ticket_id} was declined by specialist ({curr_lvl}).\n\nRemarks: {remarks}", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename, custom_subject=f"Notice: Escalation for Ticket #{ticket_id} Declined by specialist{loc_paren}")
+
+                    esc_cc = str(ticket.notify_users or p_ticket.notify_users or '')
+                    if esc_cc and esc_cc.lower() not in ['nan', 'none', '']:
+                        for u in [u.strip() for u in esc_cc.split(',') if u.strip()]:
+                            u_email = get_user_email(u, users)
+                            if u_email:
+                                database.create_notification(u_email, f"Notice: Escalation for Ticket #{ticket_id} was declined by {curr_lvl}.", ticket_id=ticket_id, role_context='Viewer', action_attachment=filename, custom_subject=f"Notice: Escalation for Ticket #{ticket_id} Declined{loc_paren}")
+
                     ticket.status = actual_status
                     database.log_ticket_action(ticket_id, solver_raw, action_name, f"Returned to {parent_lvl} solver")
                 else:
@@ -754,9 +853,12 @@ def update_ticket_status():
                 ticket.assigned_to = new_solver
                 database.log_ticket_action(ticket_id, requestor_raw, "Reassigned via Reopen", f"Assigned to {new_solver} (was {old_solver})")
                 
+                loc_val = str(ticket.location or '').strip()
+                loc_suffix = f" for {loc_val}" if loc_val and loc_val.lower() != 'nan' else ""
+
                 ns_email = get_user_email(new_solver, users)
                 if ns_email:
-                    database.create_notification(ns_email, f"Action Required: Ticket #{ticket_id} has been reopened and assigned to you.\n\nRemarks: {remarks}", role_context='Solver', action_attachment=filename)
+                    database.create_notification(ns_email, f"Action Required: Ticket #{ticket_id} has been reopened and assigned to you.\n\nRemarks: {remarks}", ticket_id=ticket_id, role_context='Solver', action_attachment=filename, custom_subject=f"Action Required: Ticket #{ticket_id} was Reopened & Assigned to you{loc_suffix}")
             
         elif new_status == 'Resolved':
             ticket.solved_timestamp = database.get_ist_now_str("%d-%m-%Y %H:%M")
@@ -778,6 +880,10 @@ def update_ticket_status():
                     Ticket.escalation_level == parent_lvl
                 ).order_by(Ticket.id.desc()).first()
                 
+                loc_val = str(ticket.location or p_ticket.location if p_ticket else '').strip()
+                loc_paren = f" ({loc_val})" if loc_val and loc_val.lower() != 'nan' else ""
+                loc_suffix = f" for {loc_val}" if loc_val and loc_val.lower() != 'nan' else ""
+
                 if p_ticket:
                     p_ticket.status = 'Escalation Resolved'
                     p_ticket.closure_type = ''
@@ -789,7 +895,18 @@ def update_ticket_status():
                     parent_solver_raw = p_ticket.assigned_to
                     parent_solver_email = get_user_email(parent_solver_raw, users)
                     if parent_solver_email:
-                        database.create_notification(parent_solver_email, f"Action Required: Escalation for Ticket #{ticket_id} was resolved by {get_user_name_dept(curr_lvl, users)}. Please review and Accept or Reject.\n\nRemarks: {remarks}", role_context='Solver', action_attachment=filename)
+                        database.create_notification(parent_solver_email, f"Action Required: Escalation for Ticket #{ticket_id} was resolved by {get_user_name_dept(curr_lvl, users)}. Please review and Accept or Reject.\n\nRemarks: {remarks}", ticket_id=ticket_id, role_context='Solver', action_attachment=filename, custom_subject=f"Action Required: Escalation for Ticket #{ticket_id} Resolved by {get_user_name_dept(curr_lvl, users)} - Please Review{loc_paren}")
+
+                    req_email = get_user_email(ticket.raised_by or p_ticket.raised_by, users)
+                    if req_email:
+                        database.create_notification(req_email, f"Update: Escalation for Ticket #{ticket_id} was resolved by specialist ({curr_lvl}). It is now being reviewed by your primary solver.", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename, custom_subject=f"Update: Escalation for Ticket #{ticket_id} resolved, pending primary review{loc_paren}")
+
+                    esc_cc = str(ticket.notify_users or p_ticket.notify_users or '')
+                    if esc_cc and esc_cc.lower() not in ['nan', 'none', '']:
+                        for u in [u.strip() for u in esc_cc.split(',') if u.strip()]:
+                            u_email = get_user_email(u, users)
+                            if u_email:
+                                database.create_notification(u_email, f"FYI: Escalation for Ticket #{ticket_id} was resolved by specialist ({curr_lvl}), pending primary review.", ticket_id=ticket_id, role_context='Viewer', action_attachment=filename, custom_subject=f"FYI: Escalation for Ticket #{ticket_id} resolved, pending primary review{loc_paren}")
             
         elif new_status == 'Closed':
             curr_lvl = str(ticket.escalation_level).strip()
@@ -810,6 +927,9 @@ def update_ticket_status():
                     Ticket.escalation_level == parent_lvl
                 ).order_by(Ticket.id.desc()).first()
                 
+                loc_val = str(ticket.location or p_ticket.location if p_ticket else '').strip()
+                loc_paren = f" ({loc_val})" if loc_val and loc_val.lower() != 'nan' else ""
+
                 if p_ticket:
                     p_ticket.status = 'In Progress'
                     p_ticket.closure_type = ''
@@ -820,7 +940,7 @@ def update_ticket_status():
                     parent_solver_raw = p_ticket.assigned_to
                     parent_solver_email = get_user_email(parent_solver_raw, users)
                     if parent_solver_email:
-                        database.create_notification(parent_solver_email, f"Success: Escalation for Ticket #{ticket_id} was successfully resolved by {get_user_name_dept(curr_lvl, users)} and returned to you.\n\nRemarks: {remarks}", role_context='Solver', action_attachment=filename)
+                        database.create_notification(parent_solver_email, f"Success: Escalation for Ticket #{ticket_id} was successfully resolved by {get_user_name_dept(curr_lvl, users)} and returned to you.\n\nRemarks: {remarks}", ticket_id=ticket_id, role_context='Solver', action_attachment=filename, custom_subject=f"Success: Escalation for Ticket #{ticket_id} resolved by {get_user_name_dept(curr_lvl, users)}{loc_paren}")
             else:
                 ticket.closed_timestamp = database.get_ist_now_str("%d-%m-%Y %H:%M")
                 ticket.closure_type = 'Accepted'
@@ -851,10 +971,11 @@ def update_ticket_status():
             new_dl_dt = now_ist + timedelta(days=duration_days)
             new_dl_str = f"{new_dl_dt.strftime('%d-%m-%Y')} 23:59"
             
+            ticket.status = 'Open'
             ticket.timestamp = new_ts_str
             ticket.deadline = new_dl_str
             if hasattr(ticket, 'absolute_deadline'): ticket.absolute_deadline = new_dl_str
-            if hasattr(ticket, 'has_extended'): ticket.has_extended = False
+            if hasattr(ticket, 'has_extended'): ticket.has_extended = 'false'
             ticket.assigned_to = new_solver
             
             old_ts_date = old_timestamp.split(' ')[0]
@@ -866,12 +987,17 @@ def update_ticket_status():
             database.log_system_action(requestor_raw or 'System', 'Reassigned', f"Ticket #{ticket_id}", f"Ticket #{ticket_id} reassigned to {new_solver}. SLA reset from ({old_ts_date} -> {old_dl_date}) to ({new_ts_date} -> {new_dl_date}).")
             ns_email = get_user_email(new_solver, users)
             if ns_email:
-                database.create_notification(ns_email, f"Action Required: Ticket #{ticket_id} has been reassigned to you by the requestor.\n\nRemarks: {remarks}", role_context='Solver', action_attachment=filename)
+                loc_val_dr = str(ticket.location or '').strip()
+                loc_suffix_dr = f" for {loc_val_dr}" if loc_val_dr and loc_val_dr.lower() != 'nan' else ""
+                database.create_notification(ns_email, f"Action Required: Ticket #{ticket_id} has been reassigned to you by the requestor.\n\nRemarks: {remarks}", ticket_id=ticket_id, role_context='Solver', action_attachment=filename, custom_subject=f"Action Required: Ticket #{ticket_id} has been reassigned to you{loc_suffix_dr}")
     
         if new_status != 'Closed':
             ticket.status = actual_status
             
         if new_deadline:
+            if original_ticket_status != 'Open' or new_status != 'In Progress':
+                return jsonify({"error": "Deadline extension is only permitted the first time a ticket transitions from Open to In Progress."}), 400
+                
             has_ext_val = str(getattr(ticket, 'has_extended', '') or '').strip().lower()
             if has_ext_val in ['true', '1', 'yes']:
                 return jsonify({"error": "Deadline has already been extended once for this ticket. Further extensions are not permitted."}), 400
@@ -895,23 +1021,62 @@ def update_ticket_status():
                     new_deadline = f"{int(d):02d}-{int(m):02d}-{y} {time_part}"
             except Exception:
                 pass
+
+            # Check if current ticket is L1 or an escalated level (L2, L3, etc.)
+            curr_esc = str(ticket.escalation_level or '').strip().upper()
+            is_l1 = (not curr_esc) or curr_esc == 'L1'
+
+            abs_dl_str = str(ticket.absolute_deadline or '').strip()
+            is_beyond_absolute = False
+            if abs_dl_str and abs_dl_str.lower() not in ['none', 'nan', '']:
+                dt_new_dl = parse_flexible_dt(new_deadline)
+                dt_abs_dl = parse_flexible_dt(abs_dl_str)
+                if dt_new_dl and dt_abs_dl and dt_new_dl > dt_abs_dl:
+                    is_beyond_absolute = True
+
             old_dl_date = str(old_deadline).split(' ')[0]
             new_dl_date = str(new_deadline).split(' ')[0]
+            abs_dl_date = abs_dl_str.split(' ')[0] if abs_dl_str else old_dl_date
+
             ticket.deadline = new_deadline
-            if new_status == 'In Progress':
-                if remarks:
-                    ticket.solver_comments = f"{remarks} [Deadline Extended: {old_dl_date} -> {new_dl_date}]"
+            if is_l1:
+                # L1 solver extends both level deadline and overall ticket absolute deadline
+                ticket.absolute_deadline = new_deadline
+                if new_status == 'In Progress':
+                    if remarks:
+                        ticket.solver_comments = f"{remarks} [Deadline Extended: {old_dl_date} -> {new_dl_date}]"
+                    else:
+                        ticket.solver_comments = f"[Deadline Extended: {old_dl_date} -> {new_dl_date}]"
+                database.log_ticket_action(ticket_id, action_by, "Deadline Extended", f"Changed from {old_dl_date} to {new_dl_date}", remarks)
+            else:
+                # Escalated solvers (L2, L3, etc.) extend their level deadline
+                if is_beyond_absolute:
+                    log_detail = f"Changed from {old_dl_date} to {new_dl_date} (Exceeds Original Ticket Deadline: {abs_dl_date})"
+                    rule_break_note = f"[Rule Breach: Deadline extended to {new_dl_date} beyond Original Ticket Deadline {abs_dl_date}]"
+                    if remarks:
+                        ticket.solver_comments = f"{remarks} {rule_break_note}"
+                    else:
+                        ticket.solver_comments = rule_break_note
+                    database.log_ticket_action(ticket_id, action_by, "Deadline Extended (Beyond Absolute)", log_detail, remarks)
                 else:
-                    ticket.solver_comments = f"[Deadline Extended: {old_dl_date} -> {new_dl_date}]"
-            database.log_ticket_action(ticket_id, action_by, "Deadline Extended", f"Changed from {old_dl_date} to {new_dl_date}", remarks)
+                    if new_status == 'In Progress':
+                        if remarks:
+                            ticket.solver_comments = f"{remarks} [Deadline Extended: {old_dl_date} -> {new_dl_date}]"
+                        else:
+                            ticket.solver_comments = f"[Deadline Extended: {old_dl_date} -> {new_dl_date}]"
+                    database.log_ticket_action(ticket_id, action_by, "Deadline Extended", f"Changed from {old_dl_date} to {new_dl_date}", remarks)
+
             ticket.has_extended = True
             
 
         cc_users_str = str(ticket.notify_users)
         
+        loc_val = str(ticket.location or '').strip()
+        loc_suffix = f" for {loc_val}" if loc_val and loc_val.lower() != 'nan' else ""
+
         notifications_to_send = []
-        def queue_notification(email, message, role_context='System', attach=filename):
-            notifications_to_send.append((email, message, role_context, attach))
+        def queue_notification(email, message, role_context='System', attach=filename, custom_subject=None):
+            notifications_to_send.append((email, message, role_context, attach, custom_subject))
 
         info_str = f"To {new_status}"
         action_title = "Status Update"
@@ -937,36 +1102,50 @@ def update_ticket_status():
 
         admin_emails = database.get_admin_emails(db)
         notified_emails = set()
-        def send_omni_notification(email, message, role_context='System'):
+        def send_omni_notification(email, message, role_context='System', custom_subject=None):
             if email and email not in notified_emails:
-                queue_notification(email, message, role_context)
+                queue_notification(email, message, role_context, custom_subject=custom_subject)
                 notified_emails.add(email)
     
-        if new_status == 'Resolved' and requestor_email:
-            send_omni_notification(requestor_email, f"Action Required: Ticket #{ticket_id} has been completely resolved by {get_user_name_dept(solver_raw, users)}! Please review and Accept.", role_context='Requestor')
+        if new_status == 'Resolved' and requestor_email and curr_lvl == 'L1':
+            send_omni_notification(requestor_email, f"Action Required: Ticket #{ticket_id} has been completely resolved by {get_user_name_dept(solver_raw, users)}! Please review and Accept.", role_context='Requestor', custom_subject=f"Action Required: Ticket #{ticket_id} has been Resolved{loc_suffix} - Please Review")
         elif new_status == 'Closed' and solver_email:
-            send_omni_notification(solver_email, f"Ticket #{ticket_id} was Accepted and Closed by the requestor.", role_context='Solver')
-        elif new_status == 'Decline' and requestor_email:
-            send_omni_notification(requestor_email, f"Notice: Ticket #{ticket_id} was declined by the solver. If you want to reassign the ticket, you have to create a separate ticket for that.", role_context='Requestor')
-        elif new_status == 'On Hold' and requestor_email:
-            send_omni_notification(requestor_email, f"Notice: Ticket #{ticket_id} has been placed on hold by the solver. If you want to reassign the ticket, you have to create a separate ticket for that.", role_context='Requestor')
+            send_omni_notification(solver_email, f"Ticket #{ticket_id} was Accepted and Closed by the requestor.", role_context='Solver', custom_subject=f"Success: Ticket #{ticket_id} has been Accepted & Closed{loc_suffix}")
+        elif new_status == 'Decline' and requestor_email and curr_lvl == 'L1':
+            send_omni_notification(requestor_email, f"Notice: Ticket #{ticket_id} was declined by the solver. If you want to reassign the ticket, you have to create a separate ticket for that.", role_context='Requestor', custom_subject=f"Notice: Ticket #{ticket_id} was Declined by Solver{loc_suffix}")
+        elif new_status == 'On Hold' and requestor_email and curr_lvl == 'L1':
+            send_omni_notification(requestor_email, f"Notice: Ticket #{ticket_id} has been placed on hold by the solver. If you want to reassign the ticket, you have to create a separate ticket for that.", role_context='Requestor', custom_subject=f"Notice: Ticket #{ticket_id} placed On Hold{loc_suffix}")
         elif new_status == 'Reopened' and solver_email:
-            send_omni_notification(solver_email, f"Action Required: Ticket #{ticket_id} was REOPENED.", role_context='Solver')
+            send_omni_notification(solver_email, f"Action Required: Ticket #{ticket_id} was REOPENED.", role_context='Solver', custom_subject=f"Action Required: Ticket #{ticket_id} was Reopened{loc_suffix}")
         elif new_status == 'In Progress' and requestor_email:
-            send_omni_notification(requestor_email, f"Update: Ticket #{ticket_id} is now In Progress. The solver has started working on it.", role_context='Requestor')
+            send_omni_notification(requestor_email, f"Update: Ticket #{ticket_id} is now In Progress. The solver has started working on it.", role_context='Requestor', custom_subject=f"Update: Ticket #{ticket_id} is now In Progress{loc_suffix}")
         
         for admin_email in admin_emails:
-            send_omni_notification(admin_email, f"Admin FYI: Ticket #{ticket_id} status updated to {actual_status}.", role_context='Admin')
+            send_omni_notification(admin_email, f"Admin FYI: Ticket #{ticket_id} status updated to {actual_status}.", role_context='Admin', custom_subject=f"Admin FYI: Ticket #{ticket_id} status updated to {actual_status}{loc_suffix}")
                 
-        if cc_users_str and cc_users_str.lower() not in ['nan', 'none', '']:
+        if cc_users_str and cc_users_str.lower() not in ['nan', 'none', ''] and curr_lvl == 'L1':
             for u in [u.strip() for u in cc_users_str.split(',') if u.strip()]:
                 u_email = get_user_email(u, users)
                 if u_email:
-                    send_omni_notification(u_email, f"FYI: Ticket #{ticket_id} status updated to: {actual_status}.", role_context='Viewer')
+                    if new_status == 'Resolved':
+                        cc_sub = f"Update: Ticket #{ticket_id} has been Resolved{loc_suffix}"
+                    elif new_status == 'Closed':
+                        cc_sub = f"Ticket #{ticket_id} has been Closed{loc_suffix}"
+                    elif new_status == 'Reopened':
+                        cc_sub = f"Notice: Ticket #{ticket_id} was Reopened{loc_suffix}"
+                    elif new_status == 'On Hold':
+                        cc_sub = f"Notice: Ticket #{ticket_id} status changed to On Hold{loc_suffix}"
+                    elif new_status == 'Decline':
+                        cc_sub = f"Notice: Ticket #{ticket_id} was Declined{loc_suffix}"
+                    elif new_status == 'In Progress':
+                        cc_sub = f"Update: Ticket #{ticket_id} status changed to In Progress{loc_suffix}"
+                    else:
+                        cc_sub = f"FYI: Ticket #{ticket_id} status updated to: {actual_status}{loc_suffix}"
+                    send_omni_notification(u_email, f"FYI: Ticket #{ticket_id} status updated to: {actual_status}.", role_context='Viewer', custom_subject=cc_sub)
                     
         # Now send all queued notifications
-        for email, msg, role, attach in notifications_to_send:
-            database.create_notification(email, msg, ticket_id=ticket_id, role_context=role, action_attachment=attach)
+        for email, msg, role, attach, c_sub in notifications_to_send:
+            database.create_notification(email, msg, ticket_id=ticket_id, role_context=role, action_attachment=attach, custom_subject=c_sub)
         try:
             database.sync_computed_ticket_metrics()
         except Exception as e:
@@ -1036,11 +1215,14 @@ def request_handover():
         raiser_raw = str(ticket.raised_by or '')
         raiser_email = get_user_email(raiser_raw, users)
         admin_emails = database.get_admin_emails(db)
+        loc_val = str(ticket.location or '').strip()
+        loc_paren = f" ({loc_val})" if loc_val and loc_val.lower() != 'nan' else ""
+
         for admin_email in admin_emails:
-            database.create_notification(admin_email, f"Action Required: Handover Request from {get_user_name_dept(solver_raw, users)} for Ticket #{ticket_id} to {get_user_name_dept(target_emp_id or target_email, users)}.", role_context='Admin', action_attachment=filename)
+            database.create_notification(admin_email, f"Action Required: Handover Request from {get_user_name_dept(solver_raw, users)} for Ticket #{ticket_id} to {get_user_name_dept(target_emp_id or target_email, users)}.", ticket_id=ticket_id, role_context='Admin', action_attachment=filename, custom_subject=f"Action Required: Handover Request for Ticket #{ticket_id}{loc_paren}")
 
         if raiser_email:
-            database.create_notification(raiser_email, f"Update: Handover requested for your Ticket #{ticket_id} by {get_user_name_dept(solver_raw, users)} to {get_user_name_dept(target_emp_id or target_email, users)}.", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename)
+            database.create_notification(raiser_email, f"Update: Handover requested for your Ticket #{ticket_id} by {get_user_name_dept(solver_raw, users)} to {get_user_name_dept(target_emp_id or target_email, users)}.", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename, custom_subject=f"Update: Handover requested for Ticket #{ticket_id}{loc_paren}")
 
 
         cc_users_str = str(ticket.notify_users or '')
@@ -1048,7 +1230,7 @@ def request_handover():
             for u in [u.strip() for u in cc_users_str.split(',') if u.strip()]:
                 u_email = get_user_email(u, users)
                 if u_email:
-                    database.create_notification(u_email, f"FYI: Handover requested for Ticket #{ticket_id} to {target_email or target_emp_id}.", ticket_id=ticket_id, role_context='Viewer', action_attachment=filename)
+                    database.create_notification(u_email, f"FYI: Handover requested for Ticket #{ticket_id} to {target_email or target_emp_id}.", ticket_id=ticket_id, role_context='Viewer', action_attachment=filename, custom_subject=f"FYI: Handover requested for Ticket #{ticket_id}{loc_paren}")
 
         database.log_ticket_action(ticket_id, solver_raw, "Handover Requested", f"Requested transfer to {target_email or target_emp_id}", reason)
         db.commit()
@@ -1063,28 +1245,57 @@ def approve_handover():
         return jsonify({}), 200
     data = request.json or {}
     ticket_id = data.get('ticket_id')
-    approve = data.get('approve')
-    actor_email = data.get('user_email') or data.get('admin_email') or 'Admin'
-    
+    decision = data.get('decision') # 'approve' or 'reject'
+    if not decision and 'approve' in data:
+        decision = 'approve' if data.get('approve') in [True, 'true', 'True', 1, '1'] else 'reject'
+    actor_email = data.get('admin_email') or data.get('user_email') or 'Admin'
+
+    if not ticket_id or decision not in ['approve', 'reject']:
+        return jsonify({"error": "Invalid payload"}), 400
+
     db = database.Session()
     try:
         users = db.query(User).all()
-        
-        ticket = db.query(Ticket).filter(Ticket.ticket_id == str(ticket_id)).order_by(Ticket.id.desc()).first()
+        escalation_level = data.get('escalation_level')
+        ticket = None
+        if escalation_level:
+            ticket = db.query(Ticket).filter(
+                Ticket.ticket_id == str(ticket_id),
+                Ticket.escalation_level == escalation_level
+            ).order_by(Ticket.id.desc()).first()
+            
+        if not ticket or not ticket.reassign_requested_to:
+            ticket = db.query(Ticket).filter(
+                Ticket.ticket_id == str(ticket_id),
+                Ticket.reassign_requested_to.isnot(None),
+                Ticket.reassign_requested_to != '',
+                Ticket.reassign_requested_to != 'nan'
+            ).order_by(Ticket.id.desc()).first()
+            
         if not ticket:
-            return jsonify({"error": "Ticket not found"}), 404
-        
-        target_emp_id = str(ticket.reassign_requested_to or '')
-        solver_raw = str(ticket.assigned_to or '')
-        
-        if approve:
+            ticket = db.query(Ticket).filter(Ticket.ticket_id == str(ticket_id)).order_by(Ticket.id.desc()).first()
+            if not ticket:
+                return jsonify({"error": "Ticket not found"}), 404
+
+        solver_raw = str(ticket.assigned_to)
+        target_emp_id = ticket.reassign_requested_to
+
+        if decision == 'approve':
+            if not target_emp_id:
+                return jsonify({"error": "No pending handover to approve"}), 400
+
+            # Prevent handover approval to raisers or solvers across all levels
+            restricted_users = get_ticket_restricted_user_identifiers(ticket_id, db, users)
+            target_emp_str = str(target_emp_id).strip()
+            target_email_str = get_user_email(target_emp_id, users)
+            if (target_emp_str.lower() in restricted_users or
+                (target_email_str and str(target_email_str).lower() in restricted_users)):
+                return jsonify({"error": "Ticket cannot be handed over to a raiser or already assigned solver of any level on this ticket."}), 400
+
             old_timestamp = str(ticket.timestamp or '')
             old_deadline = str(ticket.deadline or '')
-            
-            # Calculate original duration in days
             dt_old_ts = parse_flexible_dt(old_timestamp)
             dt_old_dl = parse_flexible_dt(old_deadline)
-            
             duration_days = 1
             if dt_old_ts and dt_old_dl and dt_old_dl > dt_old_ts:
                 diff_sec = (dt_old_dl - dt_old_ts).total_seconds()
@@ -1092,55 +1303,47 @@ def approve_handover():
                 
             tz_ist = timezone(timedelta(hours=5, minutes=30))
             now_ist = datetime.now(tz_ist).replace(tzinfo=None)
-            
             new_ts_str = f"{now_ist.strftime('%d-%m-%Y')} 23:59"
             new_dl_dt = now_ist + timedelta(days=duration_days)
             new_dl_str = f"{new_dl_dt.strftime('%d-%m-%Y')} 23:59"
             
+            ticket.status = 'Open'
+            ticket.assigned_to = target_emp_id
             ticket.timestamp = new_ts_str
             ticket.deadline = new_dl_str
-            if hasattr(ticket, 'absolute_deadline'):
-                ticket.absolute_deadline = new_dl_str
-            if hasattr(ticket, 'has_extended'):
-                ticket.has_extended = False
-
-            target_emp_str = str(target_emp_id)
-            if target_emp_str.endswith('.0'): target_emp_str = target_emp_str[:-2]
-            ticket.assigned_to = target_emp_str
-            target_u = next((u for u in users if str(u.employee_id) == target_emp_str or str(u.email) == target_emp_str), None)
-            if target_u and target_u.department:
-                ticket.dept_assigned = target_u.department
+            if hasattr(ticket, 'absolute_deadline'): ticket.absolute_deadline = new_dl_str
+            if hasattr(ticket, 'has_extended'): ticket.has_extended = 'false'
             ticket.reassign_requested_to = ''
             ticket.reassign_reason = ''
-            
-            # Commit ticket changes immediately so new state is persisted
             db.commit()
 
-            # Post-commit operations: notifications, logging, metrics sync
-            # These are non-critical — if they fail, the ticket is already updated
             try:
                 old_ts_date = old_timestamp.split(' ')[0] if old_timestamp else ''
                 old_dl_date = old_deadline.split(' ')[0] if old_deadline else ''
                 new_ts_date = now_ist.strftime('%d-%m-%Y')
                 new_dl_date = new_dl_dt.strftime('%d-%m-%Y')
                 
+                loc_val = str(ticket.location or '').strip()
+                loc_paren = f" ({loc_val})" if loc_val and loc_val.lower() != 'nan' else ""
+                loc_suffix = f" for {loc_val}" if loc_val and loc_val.lower() != 'nan' else ""
+
                 target_email = get_user_email(target_emp_id, users)
                 solver_email = get_user_email(solver_raw, users)
                 raiser_raw = str(ticket.raised_by or '')
                 raiser_email = get_user_email(raiser_raw, users)
                 if target_email:
-                    database.create_notification(target_email, f"Action Required: Ticket #{ticket_id} has been handed over to you from {get_user_name_dept(solver_raw, users)}. SLA reset to {duration_days}d ({new_dl_date}).", ticket_id=ticket_id, role_context='Solver', action_attachment=filename)
+                    database.create_notification(target_email, f"Action Required: Ticket #{ticket_id} has been handed over to you from {get_user_name_dept(solver_raw, users)}. SLA reset to {duration_days}d ({new_dl_date}).", ticket_id=ticket_id, role_context='Solver', action_attachment=filename, custom_subject=f"Action Required: Ticket #{ticket_id} handed over to you{loc_suffix}")
                 if solver_email:
-                    database.create_notification(solver_email, f"Success: Your handover request for Ticket #{ticket_id} was approved.", ticket_id=ticket_id, role_context='Solver', action_attachment=filename)
+                    database.create_notification(solver_email, f"Success: Your handover request for Ticket #{ticket_id} was approved.", ticket_id=ticket_id, role_context='Solver', action_attachment=filename, custom_subject=f"Success: Handover request for Ticket #{ticket_id} approved{loc_paren}")
                 if raiser_email:
-                    database.create_notification(raiser_email, f"Update: Handover of Ticket #{ticket_id} to {get_user_name_dept(target_emp_id or target_email, users)} was approved. SLA reset to {duration_days}d ({new_dl_date}).", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename)
+                    database.create_notification(raiser_email, f"Update: Handover of Ticket #{ticket_id} to {get_user_name_dept(target_emp_id or target_email, users)} was approved. SLA reset to {duration_days}d ({new_dl_date}).", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename, custom_subject=f"Update: Ticket #{ticket_id} handed over to new solver{loc_suffix}")
                     
                 cc_users_str = str(ticket.notify_users or '')
                 if cc_users_str and cc_users_str.lower() not in ['nan', 'none', '']:
                     for u in [u.strip() for u in cc_users_str.split(',') if u.strip()]:
                         u_email = get_user_email(u, users)
                         if u_email:
-                            database.create_notification(u_email, f"FYI: Ticket #{ticket_id} handover to {get_user_name_dept(target_emp_id or target_email, users)} was approved.", ticket_id=ticket_id, role_context='Viewer', action_attachment=filename)
+                            database.create_notification(u_email, f"FYI: Ticket #{ticket_id} handover to {get_user_name_dept(target_emp_id or target_email, users)} was approved.", ticket_id=ticket_id, role_context='Viewer', action_attachment=filename, custom_subject=f"FYI: Ticket #{ticket_id} handover was approved{loc_paren}")
                     
                 log_details = f"Handed over to {target_email or target_emp_id}. SLA reset to {duration_days}d ({new_dl_date}) [Previous Timestamp: {old_ts_date}, Previous Deadline: {old_dl_date}]"
                 database.log_ticket_action(ticket_id, actor_email, "Handover Approved", log_details, "")
@@ -1156,13 +1359,16 @@ def approve_handover():
             db.commit()
 
             try:
+                loc_val = str(ticket.location or '').strip()
+                loc_paren = f" ({loc_val})" if loc_val and loc_val.lower() != 'nan' else ""
+
                 solver_email = get_user_email(solver_raw, users)
                 raiser_raw = str(ticket.raised_by or '')
                 raiser_email = get_user_email(raiser_raw, users)
                 if solver_email:
-                    database.create_notification(solver_email, f"Alert: Your handover request for Ticket #{ticket_id} was REJECTED.", ticket_id=ticket_id, role_context='Solver', action_attachment=filename)
+                    database.create_notification(solver_email, f"Alert: Your handover request for Ticket #{ticket_id} was REJECTED.", ticket_id=ticket_id, role_context='Solver', action_attachment=filename, custom_subject=f"Alert: Handover request for Ticket #{ticket_id} was Rejected{loc_paren}")
                 if raiser_email:
-                    database.create_notification(raiser_email, f"Update: Handover request for Ticket #{ticket_id} was rejected by Admin. Kept with {get_user_name_dept(solver_raw, users)}.", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename)
+                    database.create_notification(raiser_email, f"Update: Handover request for Ticket #{ticket_id} was rejected by Admin. Kept with {get_user_name_dept(solver_raw, users)}.", ticket_id=ticket_id, role_context='Requestor', action_attachment=filename, custom_subject=f"Update: Handover request for Ticket #{ticket_id} was rejected by Admin{loc_paren}")
                 database.log_ticket_action(ticket_id, actor_email, "Handover Rejected", "Kept with original solver", "")
             except Exception as post_err:
                 print(f"Post-commit operations failed on reject (ticket already saved): {post_err}")
@@ -1228,12 +1434,13 @@ def admin_reassign_ticket():
         new_dl_dt = now_ist + timedelta(days=duration_days)
         new_dl_str = f"{new_dl_dt.strftime('%d-%m-%Y')} 23:59"
 
+        ticket.status = 'Open'
         ticket.timestamp = new_ts_str
         ticket.deadline = new_dl_str
         if hasattr(ticket, 'absolute_deadline'):
             ticket.absolute_deadline = new_dl_str
         if hasattr(ticket, 'has_extended'):
-            ticket.has_extended = False
+            ticket.has_extended = 'false'
 
         target_emp_str = str(new_solver)
         if target_emp_str.endswith('.0'): target_emp_str = target_emp_str[:-2]
@@ -1264,19 +1471,23 @@ def admin_reassign_ticket():
             raiser_raw = str(ticket.raised_by or '')
             raiser_email = get_user_email(raiser_raw, users)
 
+            loc_val = str(ticket.location or '').strip()
+            loc_paren = f" ({loc_val})" if loc_val and loc_val.lower() != 'nan' else ""
+            loc_suffix = f" for {loc_val}" if loc_val and loc_val.lower() != 'nan' else ""
+
             if target_email:
-                database.create_notification(target_email, f"Action Required: Ticket #{ticket_id} has been force-reassigned to you by Admin. SLA reset to {duration_days}d ({new_dl_date}). Reason: {reason}", ticket_id=ticket_id, role_context='Solver')
+                database.create_notification(target_email, f"Action Required: Ticket #{ticket_id} has been force-reassigned to you by Admin. SLA reset to {duration_days}d ({new_dl_date}). Reason: {reason}", ticket_id=ticket_id, role_context='Solver', custom_subject=f"Action Required: Ticket #{ticket_id} reassigned to you by Admin{loc_suffix}")
             if old_solver_email:
-                database.create_notification(old_solver_email, f"FYI: Ticket #{ticket_id} was reassigned to another solver by Admin.", ticket_id=ticket_id, role_context='Solver')
+                database.create_notification(old_solver_email, f"FYI: Ticket #{ticket_id} was reassigned to another solver by Admin.", ticket_id=ticket_id, role_context='Solver', custom_subject=f"FYI: Ticket #{ticket_id} was reassigned to another solver{loc_paren}")
             if raiser_email:
-                database.create_notification(raiser_email, f"Update: Your Ticket #{ticket_id} was reassigned by Admin to {get_user_name_dept(target_emp_str, users)}. SLA reset to {duration_days}d ({new_dl_date}). Reason: {reason}", ticket_id=ticket_id, role_context='Requestor')
+                database.create_notification(raiser_email, f"Update: Your Ticket #{ticket_id} was reassigned by Admin to {get_user_name_dept(target_emp_str, users)}. SLA reset to {duration_days}d ({new_dl_date}). Reason: {reason}", ticket_id=ticket_id, role_context='Requestor', custom_subject=f"Update: Ticket #{ticket_id} reassigned to new solver{loc_suffix}")
 
             cc_users_str = str(ticket.notify_users or '')
             if cc_users_str and cc_users_str.lower() not in ['nan', 'none', '']:
                 for u in [u.strip() for u in cc_users_str.split(',') if u.strip()]:
                     u_email = get_user_email(u, users)
                     if u_email:
-                        database.create_notification(u_email, f"FYI: Ticket #{ticket_id} was force-reassigned by Admin to {get_user_name_dept(target_emp_str, users)}.", ticket_id=ticket_id, role_context='Viewer')
+                        database.create_notification(u_email, f"FYI: Ticket #{ticket_id} was force-reassigned by Admin to {get_user_name_dept(target_emp_str, users)}.", ticket_id=ticket_id, role_context='Viewer', custom_subject=f"FYI: Ticket #{ticket_id} was force-reassigned by Admin{loc_paren}")
 
             log_details = f"Force reassigned from {get_user_name_dept(old_solver, users)} to {get_user_name_dept(target_emp_str, users)}. Reason: {reason}. SLA reset to {duration_days}d ({new_dl_date}) [Previous: {old_ts_date} -> {old_dl_date}]"
             database.log_ticket_action(ticket_id, admin_email, "Force Reassigned", log_details, reason)
@@ -2093,32 +2304,55 @@ def smart_suggest_tickets():
                         if esc_dept and esc_dept in all_depts:
                             dept_scores[esc_dept] = dept_scores.get(esc_dept, 0.0) + log_weight
 
-        best_dept = max(dept_scores, key=dept_scores.get) if (has_dept_confidence and dept_scores) else None
+        target_dept = (data.get('department') or data.get('dept_assigned') or '').strip()
+        if target_dept:
+            matched_dept = next((d for d in all_depts if d.strip().lower() == target_dept.lower()), None)
+            best_dept = matched_dept if matched_dept else target_dept
+        else:
+            best_dept = max(dept_scores, key=dept_scores.get) if (has_dept_confidence and dept_scores) else None
 
-        # Ensure suggested solver matches best_dept to eliminate department/solver mismatches
+        # Ensure suggested solver matches best_dept strictly to eliminate department/solver mismatches
         dept_solver_scores = {}
         if best_dept:
+            best_dept_lower = str(best_dept).strip().lower()
             for s_id, sc in solver_scores.items():
-                s_u = next((u for u in users if str(u.employee_id) == str(s_id) or str(u.email) == str(s_id)), None)
-                if s_u and (s_u.department or '').strip().lower() == str(best_dept).strip().lower():
-                    dept_solver_scores[s_id] = sc
+                s_u = next((u for u in users if str(u.employee_id).strip().lower() == str(s_id).strip().lower() or str(u.email).strip().lower() == str(s_id).strip().lower()), None)
+                if s_u and (s_u.department or '').strip().lower() == best_dept_lower:
+                    if str(s_u.role or '').lower() not in ['viewer', 'requestor']:
+                        dept_solver_scores[str(s_u.employee_id or s_u.email)] = sc
 
         if current_solver:
-            dept_solver_scores = {k: v for k, v in dept_solver_scores.items() if str(k).lower() != current_solver}
-            solver_scores = {k: v for k, v in solver_scores.items() if str(k).lower() != current_solver}
+            dept_solver_scores = {k: v for k, v in dept_solver_scores.items() if str(k).strip().lower() != current_solver}
 
         solver_source = "historical_learning"
-        if dept_solver_scores and max(dept_solver_scores.values()) >= 50.0:
+        if dept_solver_scores and max(dept_solver_scores.values()) >= 30.0:
             learned_solver = max(dept_solver_scores, key=dept_solver_scores.get)
-        elif solver_scores and max(solver_scores.values()) >= 50.0:
-            learned_solver = max(solver_scores, key=solver_scores.get)
         else:
-            # Smart Fallback: Pick top active solver from best_dept directory if no historical tickets exist yet for category
-            dept_users = [u for u in users if u.department and (u.department or '').strip().lower() == str(best_dept).strip().lower() and str(u.role or '').lower() not in ['viewer', 'requestor'] and str(u.employee_id).strip().lower() != current_solver]
+            # Smart Fallback: Pick top active solver strictly from best_dept directory
+            best_dept_lower = str(best_dept).strip().lower() if best_dept else ''
+            dept_users = [
+                u for u in users 
+                if u.department and (u.department or '').strip().lower() == best_dept_lower 
+                and str(u.role or '').lower() not in ['viewer', 'requestor'] 
+                and str(u.employee_id).strip().lower() != current_solver
+                and str(u.email or '').strip().lower() != current_solver
+            ]
             if not dept_users:
-                dept_users = [u for u in users if u.department and (u.department or '').strip().lower() == str(best_dept).strip().lower() and str(u.employee_id).strip().lower() != current_solver]
+                dept_users = [
+                    u for u in users 
+                    if u.department and (u.department or '').strip().lower() == best_dept_lower 
+                    and str(u.employee_id).strip().lower() != current_solver
+                    and str(u.email or '').strip().lower() != current_solver
+                ]
             learned_solver = str(dept_users[0].employee_id) if dept_users else None
             solver_source = "department_directory" if learned_solver else None
+
+        # Final sanity check: verify that learned_solver actually exists in best_dept
+        if learned_solver and best_dept:
+            u_check = next((u for u in users if str(u.employee_id).strip().lower() == str(learned_solver).strip().lower() or str(u.email).strip().lower() == str(learned_solver).strip().lower()), None)
+            if not u_check or (u_check.department or '').strip().lower() != str(best_dept).strip().lower():
+                learned_solver = None
+                solver_source = None
 
         learned_deadline_hours = round(sum(matched_hours) / len(matched_hours), 1) if matched_hours else None
 
@@ -2145,17 +2379,19 @@ def smart_suggest_tickets():
                 s = str(t.assigned_to or '').strip()
                 if d and s and s.lower() not in ['unassigned', 'nan', 'none', '']:
                     if current_solver and s.lower() == current_solver: continue
-                    pair = (d, s)
-                    if pair not in route_map:
-                        route_map[pair] = {'score': 0.0, 'hours': []}
-                    route_map[pair]['score'] += t_sim * 250.0
-                    h_val = t.solver_resolution_hours or t.ticket_age_hours or t.total_turnaround_hours
-                    if h_val:
-                        try:
-                            fh = float(h_val)
-                            if fh > 0 and not math.isnan(fh):
-                                route_map[pair]['hours'].append(fh)
-                        except (ValueError, TypeError): pass
+                    s_u = next((u for u in users if str(u.employee_id).strip().lower() == s.lower() or str(u.email).strip().lower() == s.lower()), None)
+                    if s_u and (s_u.department or '').strip().lower() == d.lower() and str(s_u.role or '').lower() not in ['viewer', 'requestor']:
+                        pair = (d, str(s_u.employee_id or s))
+                        if pair not in route_map:
+                            route_map[pair] = {'score': 0.0, 'hours': []}
+                        route_map[pair]['score'] += t_sim * 250.0
+                        h_val = t.solver_resolution_hours or t.ticket_age_hours or t.total_turnaround_hours
+                        if h_val:
+                            try:
+                                fh = float(h_val)
+                                if fh > 0 and not math.isnan(fh):
+                                    route_map[pair]['hours'].append(fh)
+                            except (ValueError, TypeError): pass
 
         for log in handover_logs:
             t_obj = ticket_lookup.get(str(log.ticket_id))
@@ -2183,25 +2419,34 @@ def smart_suggest_tickets():
                 if target_emp and target_dept:
                     if current_solver and str(target_emp).strip().lower() == current_solver:
                         continue
-                    pair = (target_dept, target_emp)
-                    if pair not in route_map:
-                        route_map[pair] = {'score': 0.0, 'hours': []}
-                    route_map[pair]['score'] += log_weight
-                    h_val = t_obj.solver_resolution_hours or t_obj.ticket_age_hours
-                    if h_val:
-                        try:
-                            fh = float(h_val)
-                            if fh > 0 and not math.isnan(fh):
-                                route_map[pair]['hours'].append(fh)
-                        except (ValueError, TypeError): pass
+                    # Verify target_emp actually belongs to target_dept
+                    t_u_check = next((u for u in users if str(u.employee_id).strip().lower() == str(target_emp).strip().lower() or str(u.email).strip().lower() == str(target_emp).strip().lower()), None)
+                    if t_u_check and (t_u_check.department or '').strip().lower() == str(target_dept).strip().lower():
+                        pair = (target_dept, str(t_u_check.employee_id or target_emp))
+                        if pair not in route_map:
+                            route_map[pair] = {'score': 0.0, 'hours': []}
+                        route_map[pair]['score'] += log_weight
+                        h_val = t_obj.solver_resolution_hours or t_obj.ticket_age_hours
+                        if h_val:
+                            try:
+                                fh = float(h_val)
+                                if fh > 0 and not math.isnan(fh):
+                                    route_map[pair]['hours'].append(fh)
+                            except (ValueError, TypeError): pass
 
         # Fill up to 4 options using top scoring departments and active solvers if needed
         sorted_depts = sorted(dept_scores, key=dept_scores.get, reverse=True) if dept_scores else all_depts
         for d in sorted_depts:
             if len(route_map) >= 6: break
-            dept_solvers = [u for u in users if (u.department or '').strip().lower() == str(d).strip().lower() and str(u.employee_id).strip().lower() != current_solver]
+            dept_solvers = [
+                u for u in users 
+                if (u.department or '').strip().lower() == str(d).strip().lower() 
+                and str(u.employee_id).strip().lower() != current_solver
+                and str(u.email or '').strip().lower() != current_solver
+                and str(u.role or '').lower() not in ['viewer', 'requestor']
+            ]
             if not dept_solvers:
-                dept_solvers = [u for u in users if str(u.employee_id).strip().lower() != current_solver][:3]
+                continue
             for s_u in dept_solvers:
                 emp_id = str(s_u.employee_id or s_u.email)
                 pair = (d, emp_id)

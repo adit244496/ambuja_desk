@@ -66,7 +66,10 @@ def send_ticket_email(to_email, subject, message_body, ticket_details=None, cc_e
     if ticket_details:
         html_body += "<h3>--- Ticket Details ---</h3><ul>"
         for key, value in ticket_details.items():
-            html_body += f"<li><strong>{key}:</strong> {value}</li>"
+            val_str = str(value) if value is not None else ''
+            if key.lower() == 'deadline' and val_str and val_str.lower() not in ['n/a', 'none', 'nan', '']:
+                val_str = val_str.split(' ')[0]
+            html_body += f"<li><strong>{key}:</strong> {val_str}</li>"
         html_body += "</ul>"
         
         ticket_id = ticket_details.get('Ticket ID')

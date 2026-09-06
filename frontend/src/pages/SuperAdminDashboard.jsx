@@ -13,11 +13,12 @@ import Layout from '../components/Layout';
 import DocumentPreview from '../components/DocumentPreview';
 import AttachmentBadge from '../components/AttachmentBadge';
 import SLACountdownBadge from '../components/SLACountdownBadge';
+import SLABreachModeToggle from '../components/SLABreachModeToggle';
 import { exportExecutivePDF, exportExecutiveCSV } from '../utils/exportExecutiveReports';
-import { parseDateToTimestamp } from '../utils/dateUtils';
+import { parseDateToTimestamp, parseDateString, getISTDate } from '../utils/dateUtils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import AdminAnalytics from '../components/AdminAnalytics';
-import { Download, AlertTriangle, Settings, TrendingUp, Clock, Users, MapPin, Cog, CheckCircle2, ClipboardCheck, Zap, ChevronDown, ChevronUp, PlusCircle, ArrowUpRight, RefreshCw, CheckCircle, UserPlus, UserCheck, Activity, FileText, Maximize2, Minimize2, MessageSquare, Filter, Pencil, Key, Power, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Download, AlertTriangle, Settings, TrendingUp, Clock, Users, MapPin, Cog, CheckCircle2, ClipboardCheck, Zap, ChevronDown, ChevronUp, PlusCircle, ArrowUpRight, RefreshCw, CheckCircle, UserPlus, UserCheck, Activity, FileText, Maximize2, Minimize2, MessageSquare, Filter, Pencil, Key, Power, Trash2, ArrowUp, ArrowDown, X, Calendar, Search } from 'lucide-react';
 
 const ExpandableDescription = ({ text }) => {
     const [expanded, setExpanded] = useState(false);
@@ -253,6 +254,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [showKPIs, setShowKPIs] = useState(true);
+    const [slaBreachMode, setSlaBreachMode] = useState('active'); // 'active' (Live / Active Breach) or 'all' (All-Time SLA Breach)
     const [previewUrl, setPreviewUrl] = useState(null);
     const handlePreviewUrl = (url) => {
         if (!url) return;
@@ -265,45 +267,32 @@ const SuperAdminDashboard = ({ user, setUser }) => {
     };
 
     const getDisplayDelayDays = (row) => {
-        if (row.solver_delay_hours && Number(row.solver_delay_hours) > 0) {
+        if (!row) return '0d';
+        if (row.solver_delay_hours !== undefined && row.solver_delay_hours !== null && Number(row.solver_delay_hours) > 0) {
             return (Number(row.solver_delay_hours) / 24).toFixed(1) + 'd';
         }
-        if (row.deadline && String(row.deadline).trim()) {
-            try {
-                const dStr = String(row.deadline).trim();
-                let dDate = null;
-                if (dStr.includes('-')) {
-                    const parts = dStr.split(' ');
-                    const dateParts = parts[0].split('-');
-                    if (dateParts[0].length === 4) {
-                        dDate = new Date(dStr);
-                    } else if (dateParts[0].length === 2) {
-                        const [d, m, y] = dateParts;
-                        const timePart = parts[1] || '23:59';
-                        dDate = new Date(`${y}-${m}-${d}T${timePart}:00`);
-                    }
-                } else if (dStr.includes('/')) {
-                    const parts = dStr.split(' ');
-                    const dateParts = parts[0].split('/');
-                    if (dateParts[0].length === 2) {
-                        const [d, m, y] = dateParts;
-                        const timePart = parts[1] || '23:59';
-                        dDate = new Date(`${y}-${m}-${d}T${timePart}:00`);
-                    }
-                } else {
-                    dDate = new Date(dStr);
-                }
+        if (!row.deadline || String(row.deadline).toLowerCase() === 'nan') return '0d';
+        const deadlineDate = parseDateString(row.deadline);
+        if (!deadlineDate) return '0d';
 
-                if (dDate && !isNaN(dDate.getTime())) {
-                    const now = new Date();
-                    const diffMs = now.getTime() - dDate.getTime();
-                    if (diffMs > 0 && row.status !== 'Resolved' && row.status !== 'Closed') {
-                        return (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd';
-                    }
+        const st = String(row.status || '').toLowerCase();
+        const ct = String(row.closure_type || '').toLowerCase();
+        const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+
+        if (isFinished) {
+            const finishStr = row.closed_timestamp || row.solved_timestamp;
+            if (finishStr && String(finishStr).toLowerCase() !== 'nan') {
+                const finishDate = parseDateString(finishStr);
+                if (finishDate) {
+                    const diffMs = finishDate.getTime() - deadlineDate.getTime();
+                    return diffMs > 0 ? (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd' : '0d';
                 }
-            } catch (e) { }
+            }
+            return '0d';
+        } else {
+            const diffMs = getISTDate().getTime() - deadlineDate.getTime();
+            return diffMs > 0 ? (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd' : '0d';
         }
-        return '0d';
     };
 
     const [usersList, setUsersList] = useState([]);
@@ -390,6 +379,13 @@ const SuperAdminDashboard = ({ user, setUser }) => {
     const [isSidePanelExpanded, setIsSidePanelExpanded] = useState(false);
     const [ticketLogs, setTicketLogs] = useState([]);
     const [systemLogs, setSystemLogs] = useState([]);
+    const [systemLogSearch, setSystemLogSearch] = useState('');
+    const [systemLogActorFilter, setSystemLogActorFilter] = useState('');
+    const [systemLogActionFilter, setSystemLogActionFilter] = useState('');
+    const [systemLogStartDate, setSystemLogStartDate] = useState('');
+    const [systemLogEndDate, setSystemLogEndDate] = useState('');
+    const [logSortField, setLogSortField] = useState('timestamp');
+    const [logSortOrder, setLogSortOrder] = useState('desc');
     const [activeDetailsTab, setActiveDetailsTab] = useState('details');
 
     // --- FORCE REASSIGN MODAL STATE ---
@@ -653,7 +649,8 @@ const SuperAdminDashboard = ({ user, setUser }) => {
     };
 
     const handleDownloadSystemLogsCSV = () => {
-        if (!systemLogs || systemLogs.length === 0) {
+        const dataToExport = filteredSystemLogs && filteredSystemLogs.length > 0 ? filteredSystemLogs : systemLogs;
+        if (!dataToExport || dataToExport.length === 0) {
             alert("No system logs to download.");
             return;
         }
@@ -669,7 +666,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
         const headers = exportColumns.map(col => col.label);
         const csvRows = [headers.join(',')];
 
-        for (const row of systemLogs) {
+        for (const row of dataToExport) {
             const values = exportColumns.map(col => {
                 const val = row[col.key] !== null && row[col.key] !== undefined ? row[col.key] : '';
                 const escaped = ('' + val).replace(/"/g, '""');
@@ -787,10 +784,16 @@ const SuperAdminDashboard = ({ user, setUser }) => {
     };
 
     // --- APPROVALS HANDLERS ---
-    const handleApproval = async (ticketId, approve) => {
+    const handleApproval = async (ticketId, approve, escalationLevel = 'L1') => {
         if (!window.confirm(`Are you sure you want to ${approve ? 'approve' : 'reject'} this handover?`)) return;
         try {
-            await approveHandover({ ticket_id: ticketId, approve, user_email: user?.email || user?.employee_id || 'Admin' });
+            await approveHandover({
+                ticket_id: ticketId,
+                decision: approve ? 'approve' : 'reject',
+                approve,
+                escalation_level: escalationLevel,
+                user_email: user?.email || user?.employee_id || 'Admin'
+            });
             alert(`Handover ${approve ? 'approved' : 'rejected'} successfully.`);
             loadSystemData();
         } catch (err) {
@@ -1028,6 +1031,93 @@ const SuperAdminDashboard = ({ user, setUser }) => {
         return result;
     }, [activityCategoriesList, catSearchQuery, catSearchConstraint, catSortField, catSortOrder]);
 
+    const handleLogSortClick = (field) => {
+        if (logSortField === field) {
+            setLogSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setLogSortField(field);
+            setLogSortOrder('asc');
+        }
+    };
+
+    const isSystemLogFiltered = Boolean(
+        systemLogSearch.trim() ||
+        systemLogActorFilter ||
+        systemLogActionFilter ||
+        systemLogStartDate ||
+        systemLogEndDate
+    );
+
+    const filteredSystemLogs = useMemo(() => {
+        const q = systemLogSearch.trim().toLowerCase();
+        const actorQ = systemLogActorFilter.trim().toLowerCase();
+        const actionQ = systemLogActionFilter.trim().toLowerCase();
+        const startDt = systemLogStartDate ? new Date(systemLogStartDate) : null;
+        const endDt = systemLogEndDate ? new Date(systemLogEndDate) : null;
+
+        return (systemLogs || []).filter(log => {
+            if (q) {
+                const matchAny = String(log.timestamp || '').toLowerCase().includes(q) ||
+                    String(log.actor_email || '').toLowerCase().includes(q) ||
+                    String(log.action || '').toLowerCase().includes(q) ||
+                    String(log.target || '').toLowerCase().includes(q) ||
+                    String(log.details || '').toLowerCase().includes(q);
+                if (!matchAny) return false;
+            }
+
+            if (actorQ) {
+                const actorVal = String(log.actor_email || '').toLowerCase();
+                if (!actorVal.includes(actorQ)) return false;
+            }
+
+            if (actionQ) {
+                const actionVal = String(log.action || '').toLowerCase();
+                if (!actionVal.includes(actionQ)) return false;
+            }
+
+            if (startDt || endDt) {
+                const logDt = parseDateString(log.timestamp);
+                if (logDt) {
+                    if (startDt && logDt < startDt) return false;
+                    if (endDt && logDt > endDt) return false;
+                }
+            }
+
+            return true;
+        });
+    }, [systemLogs, systemLogSearch, systemLogActorFilter, systemLogActionFilter, systemLogStartDate, systemLogEndDate]);
+
+    const sortedSystemLogs = useMemo(() => {
+        const list = [...filteredSystemLogs];
+        list.sort((a, b) => {
+            if (logSortField === 'timestamp') {
+                const dtA = parseDateString(a.timestamp);
+                const dtB = parseDateString(b.timestamp);
+                const timeA = dtA ? dtA.getTime() : 0;
+                const timeB = dtB ? dtB.getTime() : 0;
+                return logSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+            }
+            const valA = String(a[logSortField] || '');
+            const valB = String(b[logSortField] || '');
+            const cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+            return logSortOrder === 'asc' ? cmp : -cmp;
+        });
+
+        // If NO filter is applied, only show top 20 results. If filter is applied, show full filtered list.
+        if (!isSystemLogFiltered) {
+            return list.slice(0, 20);
+        }
+        return list;
+    }, [filteredSystemLogs, logSortField, logSortOrder, isSystemLogFiltered]);
+
+    const uniqueLogActors = useMemo(() => {
+        return [...new Set((systemLogs || []).map(l => l.actor_email).filter(Boolean))].sort();
+    }, [systemLogs]);
+
+    const uniqueLogActions = useMemo(() => {
+        return [...new Set((systemLogs || []).map(l => l.action).filter(Boolean))].sort();
+    }, [systemLogs]);
+
     const pendingApprovals = ticketsList.filter(t => t.reassign_requested_to && String(t.reassign_requested_to).toLowerCase() !== 'nan' && t.reassign_requested_to !== '');
 
     const sidebarTabs = [
@@ -1040,14 +1130,35 @@ const SuperAdminDashboard = ({ user, setUser }) => {
     // =========================================================================
     // GLOBAL KPI ENGINE (PINNED TO TOP OF ALL TABS)
     // =========================================================================
-    const isLate = (ticket) => {
-        if (!ticket.deadline || ticket.status === 'Closed' || ticket.status === 'Resolved') return false;
-        try {
-            const [datePart, timePart] = ticket.deadline.split(' ');
-            const [day, month, year] = datePart.split('-');
-            const [hour, minute] = timePart ? timePart.split(':') : [0, 0];
-            return new Date(year, month - 1, day, hour, minute) < new Date();
-        } catch (err) { return false; }
+    const isLate = (ticket, targetMode = slaBreachMode) => {
+        if (!ticket) return false;
+        if (ticket.solver_delay_hours !== undefined && ticket.solver_delay_hours !== null && Number(ticket.solver_delay_hours) > 0) {
+            const st = String(ticket.status || '').toLowerCase();
+            const ct = String(ticket.closure_type || '').toLowerCase();
+            const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+            if (isFinished && targetMode === 'active') return false;
+            return true;
+        }
+        if (!ticket.deadline || String(ticket.deadline).toLowerCase() === 'nan') return false;
+
+        const deadlineDate = parseDateString(ticket.deadline);
+        if (!deadlineDate) return false;
+
+        const st = String(ticket.status || '').toLowerCase();
+        const ct = String(ticket.closure_type || '').toLowerCase();
+        const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+
+        if (isFinished) {
+            if (targetMode === 'active') return false; // In Active/Live mode, closed/declined/held are not active breaches
+            const finishStr = ticket.closed_timestamp || ticket.solved_timestamp;
+            if (finishStr && String(finishStr).toLowerCase() !== 'nan') {
+                const finishDate = parseDateString(finishStr);
+                if (finishDate) return finishDate > deadlineDate;
+            }
+            return ticket.SLA_Breach === true || ticket.SLA_Breach === 'True';
+        }
+
+        return getISTDate() > deadlineDate;
     };
 
     const filteredAgeing = ageingData.filter(a => {
@@ -1146,31 +1257,6 @@ const SuperAdminDashboard = ({ user, setUser }) => {
         return result;
     }, [filteredAgeing, ageingSortField, ageingSortOrder]);
 
-    const [logSortField, setLogSortField] = useState('id');
-    const [logSortOrder, setLogSortOrder] = useState('desc');
-
-    const handleLogSortClick = (field) => {
-        if (logSortField === field) {
-            setLogSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-        } else {
-            setLogSortField(field);
-            setLogSortOrder('asc');
-        }
-    };
-
-    const sortedSystemLogs = useMemo(() => {
-        let result = [...systemLogs];
-        if (logSortField) {
-            result.sort((a, b) => {
-                let valA = String(a[logSortField] || '').toLowerCase();
-                let valB = String(b[logSortField] || '').toLowerCase();
-                const cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
-                return logSortOrder === 'asc' ? cmp : -cmp;
-            });
-        }
-        return result;
-    }, [systemLogs, logSortField, logSortOrder]);
-
 
     const globalKPI = useMemo(() => {
         const counts = {
@@ -1246,11 +1332,11 @@ const SuperAdminDashboard = ({ user, setUser }) => {
             else if (stat === 'on hold') increment('onHold', lvl);
             else if (stat === 'escalate' || stat === 'escalated') increment('escalated', lvl);
 
-            if (isLate(t)) increment('late', lvl);
+            if (isLate(t, slaBreachMode)) increment('late', lvl);
         });
 
         return counts;
-    }, [filteredAgeing]);
+    }, [filteredAgeing, slaBreachMode]);
 
     const renderTooltip = (levelsObj) => {
         const entries = Object.entries(levelsObj).sort();
@@ -1310,33 +1396,32 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                             }} disabled={selectedMasterDepartments.length === 0 && selectedMasterIssues.length === 0 && selectedMasterActivities.length === 0} style={{ backgroundColor: (selectedMasterDepartments.length > 0 || selectedMasterIssues.length > 0 || selectedMasterActivities.length > 0) ? '#ef4444' : '#fca5a5', padding: '6px 12px', fontSize: '11px', whiteSpace: 'nowrap', minHeight: 'auto', margin: 0, cursor: (selectedMasterDepartments.length > 0 || selectedMasterIssues.length > 0 || selectedMasterActivities.length > 0) ? 'pointer' : 'not-allowed' }}>Delete Selected</button>
                         </div>
                     )}
-                    {activeTab !== 'analytics' && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <button
-                                className="btn p-2 text-xs flex-row gap-1"
-                                onClick={() => setShowKPIs(prev => !prev)}
-                                title={showKPIs ? "Hide KPI Cards" : "Show KPI Cards"}
-                                style={{
-                                    whiteSpace: 'nowrap',
-                                    borderRadius: '6px',
-                                    backgroundColor: 'var(--bg-card, #131b2e)',
-                                    border: '1px solid var(--border, #1e293b)',
-                                    color: 'var(--text-main, #f1f5f9)',
-                                    fontSize: '11px',
-                                    padding: '6px 10px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                {showKPIs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                                {showKPIs ? 'Hide KPIs' : 'Show KPIs'}
-                            </button>
-                        </div>
-                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <SLABreachModeToggle mode={slaBreachMode} onChange={setSlaBreachMode} />
+                        <button
+                            className="btn p-2 text-xs flex-row gap-1"
+                            onClick={() => setShowKPIs(prev => !prev)}
+                            title={showKPIs ? "Hide KPI Cards" : "Show KPI Cards"}
+                            style={{
+                                whiteSpace: 'nowrap',
+                                borderRadius: '6px',
+                                backgroundColor: 'var(--bg-card, #131b2e)',
+                                border: '1px solid var(--border, #1e293b)',
+                                color: 'var(--text-main, #f1f5f9)',
+                                fontSize: '11px',
+                                padding: '6px 10px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {showKPIs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                            {showKPIs ? 'Hide KPIs' : 'Show KPIs'}
+                        </button>
+                    </div>
                 </div>
                 {error && <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '8px', borderRadius: '3px', marginBottom: '12px', fontSize: '10px' }}>{error}</div>}
 
-                {/* --- GLOBAL KPI METRICS BOARD (ALWAYS VISIBLE IN ANALYTICS, COLLAPSIBLE IN OTHER TABS) --- */}
-                {(activeTab === 'analytics' || showKPIs) && (
+                {/* --- GLOBAL KPI METRICS BOARD (COLLAPSIBLE) --- */}
+                {showKPIs && (
                     <div className="kpi-grid">
                         <div className="card kpi-card kpi-blue" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #3b82f6', background: 'linear-gradient(180deg, rgba(59,130,246,0.25) 0%, rgba(59,130,246,0) 100%)' }}>
 
@@ -1385,7 +1470,9 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                         </div>
                         <div className="card kpi-card kpi-sla kpi-orange" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #F7941D', background: 'linear-gradient(180deg, rgba(247,148,29,0.25) 0%, rgba(247,148,29,0) 100%)' }}>
                             {renderTooltip(globalKPI.late.levels)}
-                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>SLA Breach</p>
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>
+                                {slaBreachMode === 'active' ? 'Live SLA Breach' : 'All-Time SLA Breach'}
+                            </p>
                             <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{globalKPI.late.count}</h2>
                         </div>
                     </div>
@@ -1393,7 +1480,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
 
                 {/* TAB CONTENT VIEWS */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, paddingBottom: '16px' }}>
-                    {activeTab === 'analytics' && !loading && <AdminAnalytics tickets={ticketsList} usersList={usersList} />}
+                    {activeTab === 'analytics' && !loading && <AdminAnalytics tickets={ageingData && ageingData.length > 0 ? ageingData : ticketsList} usersList={usersList} slaBreachMode={slaBreachMode} onSlaBreachModeChange={setSlaBreachMode} />}
 
                     {activeTab === 'approvals' && !loading && (
                         <div className="card">
@@ -1433,8 +1520,8 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '10px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: '120px' }}>
-                                                    <button onClick={() => handleApproval(ticket.ticket_id, true)} className="btn btn-success" style={{ padding: '4px 8px', fontSize: '9px', marginRight: '5px' }}>Approve</button>
-                                                    <button onClick={() => handleApproval(ticket.ticket_id, false)} className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '9px' }}>Reject</button>
+                                                    <button onClick={() => handleApproval(ticket.ticket_id, true, ticket.escalation_level)} className="btn btn-success" style={{ padding: '4px 8px', fontSize: '9px', marginRight: '5px' }}>Approve</button>
+                                                    <button onClick={() => handleApproval(ticket.ticket_id, false, ticket.escalation_level)} className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '9px' }}>Reject</button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -1672,37 +1759,159 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                     {/* MASTER CONTROL TAB */}
                     {activeTab === 'system_logs' && !loading && (
                         <div className="card fade-in" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, marginBottom: 0 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                     <h3 style={{ margin: 0, whiteSpace: 'nowrap', fontSize: '16px' }}>System Logs</h3>
+                                    <span style={{
+                                        fontSize: '11px',
+                                        padding: '3px 8px',
+                                        borderRadius: '12px',
+                                        backgroundColor: isSystemLogFiltered ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                                        color: isSystemLogFiltered ? '#60a5fa' : 'var(--text-muted)',
+                                        fontWeight: '600'
+                                    }}>
+                                        {isSystemLogFiltered
+                                            ? `Showing all ${filteredSystemLogs.length} matching logs`
+                                            : `Showing Top ${sortedSystemLogs.length} of ${systemLogs.length} logs`}
+                                    </span>
                                 </div>
                                 <button
                                     className="btn force-white-text p-2 text-xs flex-row gap-1"
                                     onClick={handleDownloadSystemLogsCSV}
-                                    style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#3b82f6', color: '#ffffff', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '11px', cursor: 'pointer' }}
-                                    title="Download System Logs (CSV)"
+                                    style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#3b82f6', color: '#ffffff', border: 'none', borderRadius: '6px', padding: '6px 14px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 6px rgba(59, 130, 246, 0.3)' }}
+                                    title={isSystemLogFiltered ? `Download ${filteredSystemLogs.length} filtered logs (CSV)` : `Download all ${systemLogs.length} system logs (CSV)`}
                                 >
                                     <Download size={13} style={{ color: '#ffffff' }} />
-                                    <span style={{ color: '#ffffff' }}>Download CSV</span>
+                                    <span style={{ color: '#ffffff' }}>
+                                        {isSystemLogFiltered ? `Download Filtered CSV (${filteredSystemLogs.length})` : `Download Full CSV (${systemLogs.length})`}
+                                    </span>
                                 </button>
                             </div>
+
+                            {/* FILTER TOOLBAR */}
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                                gap: '10px',
+                                padding: '12px',
+                                backgroundColor: 'var(--bg-card, #18181b)',
+                                border: '1px solid var(--border, rgba(255,255,255,0.08))',
+                                borderRadius: '6px',
+                                marginBottom: '16px',
+                                alignItems: 'center'
+                            }}>
+                                {/* General Text Search */}
+                                <div style={{ position: 'relative' }}>
+                                    <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                    <input
+                                        type="text"
+                                        placeholder="Search keyword / target..."
+                                        value={systemLogSearch}
+                                        onChange={(e) => setSystemLogSearch(e.target.value)}
+                                        style={{ width: '100%', padding: '6px 10px 6px 30px', fontSize: '11px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-main)', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+
+                                {/* Actor Filter */}
+                                <div>
+                                    <select
+                                        value={systemLogActorFilter}
+                                        onChange={(e) => setSystemLogActorFilter(e.target.value)}
+                                        style={{ width: '100%', padding: '6px 10px', fontSize: '11px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-main)', boxSizing: 'border-box' }}
+                                    >
+                                        <option value="">All Actors ({uniqueLogActors.length})</option>
+                                        {uniqueLogActors.map((actor, idx) => (
+                                            <option key={idx} value={actor}>{actor}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Action Filter */}
+                                <div>
+                                    <select
+                                        value={systemLogActionFilter}
+                                        onChange={(e) => setSystemLogActionFilter(e.target.value)}
+                                        style={{ width: '100%', padding: '6px 10px', fontSize: '11px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-main)', boxSizing: 'border-box' }}
+                                    >
+                                        <option value="">All Actions ({uniqueLogActions.length})</option>
+                                        {uniqueLogActions.map((act, idx) => (
+                                            <option key={idx} value={act}>{act}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Start Date Filter */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <label style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>From:</label>
+                                    <input
+                                        type="date"
+                                        value={systemLogStartDate}
+                                        onChange={(e) => setSystemLogStartDate(e.target.value)}
+                                        style={{ width: '100%', padding: '5px 8px', fontSize: '11px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-main)', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+
+                                {/* End Date Filter */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <label style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>To:</label>
+                                    <input
+                                        type="date"
+                                        value={systemLogEndDate}
+                                        onChange={(e) => setSystemLogEndDate(e.target.value)}
+                                        style={{ width: '100%', padding: '5px 8px', fontSize: '11px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-main)', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+
+                                {/* Clear Filters */}
+                                {isSystemLogFiltered && (
+                                    <div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSystemLogSearch('');
+                                                setSystemLogActorFilter('');
+                                                setSystemLogActionFilter('');
+                                                setSystemLogStartDate('');
+                                                setSystemLogEndDate('');
+                                            }}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                fontSize: '11px',
+                                                padding: '6px 12px',
+                                                color: '#ef4444',
+                                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                width: '100%',
+                                                justifyContent: 'center'
+                                            }}
+                                        >
+                                            <X size={12} /> Clear Filters
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
                             <div style={{ flex: 1, overflowY: 'auto' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', tableLayout: 'fixed' }}>
                                     <thead>
                                         <tr>
-                                            <th onClick={() => handleLogSortClick('timestamp')} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Timestamp">
+                                            <th onClick={() => handleLogSortClick('timestamp')} style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', width: '15%' }} title="Sort by Timestamp">
                                                 Timestamp {logSortField === 'timestamp' ? (logSortOrder === 'asc' ? '▲' : '▼') : ''}
                                             </th>
-                                            <th onClick={() => handleLogSortClick('actor_email')} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Actor">
+                                            <th onClick={() => handleLogSortClick('actor_email')} style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', width: '18%' }} title="Sort by Actor">
                                                 Actor {logSortField === 'actor_email' ? (logSortOrder === 'asc' ? '▲' : '▼') : ''}
                                             </th>
-                                            <th onClick={() => handleLogSortClick('action')} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Action">
+                                            <th onClick={() => handleLogSortClick('action')} style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', width: '18%' }} title="Sort by Action">
                                                 Action {logSortField === 'action' ? (logSortOrder === 'asc' ? '▲' : '▼') : ''}
                                             </th>
-                                            <th onClick={() => handleLogSortClick('target')} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Target">
+                                            <th onClick={() => handleLogSortClick('target')} style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', width: '22%' }} title="Sort by Target">
                                                 Target {logSortField === 'target' ? (logSortOrder === 'asc' ? '▲' : '▼') : ''}
                                             </th>
-                                            <th onClick={() => handleLogSortClick('details')} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Details">
+                                            <th onClick={() => handleLogSortClick('details')} style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none', width: '27%' }} title="Sort by Details">
                                                 Details {logSortField === 'details' ? (logSortOrder === 'asc' ? '▲' : '▼') : ''}
                                             </th>
                                         </tr>
@@ -1710,11 +1919,11 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                     <tbody>
                                         {sortedSystemLogs.map((log, i) => (
                                             <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                                                <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>{log.timestamp}</td>
-                                                <td style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: 'bold' }}>{log.actor_email}</td>
-                                                <td style={{ padding: '12px 16px' }}>{log.action}</td>
-                                                <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>{log.target}</td>
-                                                <td style={{ padding: '12px 16px' }}>{log.details}</td>
+                                                <td style={{ padding: '12px 14px', color: 'var(--text-muted)', whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{log.timestamp}</td>
+                                                <td style={{ padding: '12px 14px', color: 'var(--text-muted)', fontWeight: 'bold', whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{log.actor_email}</td>
+                                                <td style={{ padding: '12px 14px', color: '#60a5fa', fontWeight: '600', whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{log.action}</td>
+                                                <td style={{ padding: '12px 14px', color: 'var(--text-muted)', whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{log.target || '-'}</td>
+                                                <td style={{ padding: '12px 14px', whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{log.details || '-'}</td>
                                             </tr>
                                         ))}
                                         {sortedSystemLogs.length === 0 && (
@@ -2795,14 +3004,25 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                             options={[
                                                 { value: '', label: '🚫 No Manager (None)' },
                                                 ...usersList.filter(u => {
-                                                    if (u.employee_id === userFormData.employee_id) return false;
+                                                    if (u.employee_id && userFormData.employee_id && String(u.employee_id).trim() === String(userFormData.employee_id).trim()) return false;
+                                                    const uDept = (u.department || u.department_name || u.Department || '').toString().trim().toLowerCase();
+                                                    // CXO department users can be reporting manager across any department
+                                                    if (uDept === 'cxo') return true;
+                                                    if (userFormData.reporting_manager && String(u.employee_id).trim() === String(userFormData.reporting_manager).trim()) return true;
                                                     if (userFormData.department) {
-                                                        const uDept = (u.department || u.department_name || u.Department || '').toString().trim().toLowerCase();
                                                         const selDept = userFormData.department.toString().trim().toLowerCase();
                                                         return uDept === selDept;
                                                     }
                                                     return true;
-                                                }).map(u => ({ value: u.employee_id, label: getSolverDetails(u.employee_id) }))
+                                                }).map(u => {
+                                                    const uDept = (u.department || u.department_name || u.Department || '').toString().trim().toLowerCase();
+                                                    const selDept = (userFormData.department || '').toString().trim().toLowerCase();
+                                                    const isCrossCxo = uDept === 'cxo' && selDept !== 'cxo';
+                                                    return {
+                                                        value: u.employee_id,
+                                                        label: `${getSolverDetails(u.employee_id)}${isCrossCxo ? ' [CXO]' : ''}`
+                                                    };
+                                                })
                                             ]}
                                             value={userFormData.reporting_manager || ''}
                                             onChange={(val) => setUserFormData({ ...userFormData, reporting_manager: val })}

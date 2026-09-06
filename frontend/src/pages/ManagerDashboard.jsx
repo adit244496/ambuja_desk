@@ -6,7 +6,9 @@ import { Users, Clock, Filter, Download, FileText, Activity, ChevronDown, Chevro
 import DocumentPreview from '../components/DocumentPreview';
 import AttachmentBadge from '../components/AttachmentBadge';
 import SLACountdownBadge from '../components/SLACountdownBadge';
-import { exportExecutiveCSV } from '../utils/exportExecutiveReports';
+import SLABreachModeToggle from '../components/SLABreachModeToggle';
+import { exportExecutiveCSV, exportExecutivePDF } from '../utils/exportExecutiveReports';
+import { parseDateString, getISTDate } from '../utils/dateUtils';
 
 const ExpandableDescription = ({ text }) => {
     const [expanded, setExpanded] = useState(false);
@@ -159,6 +161,7 @@ const ManagerDashboard = ({ user, setUser }) => {
     const [isAgeingExpanded, setIsAgeingExpanded] = useState(false);
     const [isSidePanelExpanded, setIsSidePanelExpanded] = useState(false);
     const [activeDetailsTab, setActiveDetailsTab] = useState('details');
+    const [slaBreachMode, setSlaBreachMode] = useState('active'); // 'active' (Live / Active Breach) or 'all' (All-Time SLA Breach)
 
     const [comments, setComments] = useState([]);
 
@@ -307,19 +310,64 @@ const ManagerDashboard = ({ user, setUser }) => {
     };
 
     const getDisplayDelayDays = (a) => {
-        if (!a || !a.delay_hours || Number(a.delay_hours) <= 0) return '0d';
-        const days = (Number(a.delay_hours) / 24).toFixed(1);
-        return `${days}d`;
+        if (!a) return '0d';
+        if (a.solver_delay_hours !== undefined && a.solver_delay_hours !== null && Number(a.solver_delay_hours) > 0) {
+            return (Number(a.solver_delay_hours) / 24).toFixed(1) + 'd';
+        }
+        if (a.delay_hours !== undefined && a.delay_hours !== null && Number(a.delay_hours) > 0) {
+            return (Number(a.delay_hours) / 24).toFixed(1) + 'd';
+        }
+        if (!a.deadline || String(a.deadline).toLowerCase() === 'nan') return '0d';
+        const deadlineDate = parseDateString(a.deadline);
+        if (!deadlineDate) return '0d';
+
+        const st = String(a.status || '').toLowerCase();
+        const ct = String(a.closure_type || '').toLowerCase();
+        const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+
+        if (isFinished) {
+            const finishStr = a.closed_timestamp || a.solved_timestamp;
+            if (finishStr && String(finishStr).toLowerCase() !== 'nan') {
+                const finishDate = parseDateString(finishStr);
+                if (finishDate) {
+                    const diffMs = finishDate.getTime() - deadlineDate.getTime();
+                    return diffMs > 0 ? (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd' : '0d';
+                }
+            }
+            return '0d';
+        } else {
+            const diffMs = getISTDate().getTime() - deadlineDate.getTime();
+            return diffMs > 0 ? (diffMs / (1000 * 60 * 60 * 24)).toFixed(1) + 'd' : '0d';
+        }
     };
 
-    const isLate = (ticket) => {
-        if (!ticket.deadline || ticket.status === 'Closed' || ticket.status === 'Resolved') return false;
-        try {
-            const deadlineDate = new Date(ticket.deadline.replace(' ', 'T'));
-            return new Date() > deadlineDate;
-        } catch (e) {
-            return false;
+    const isLate = (ticket, targetMode = slaBreachMode) => {
+        if (!ticket) return false;
+        if (ticket.solver_delay_hours !== undefined && ticket.solver_delay_hours !== null && Number(ticket.solver_delay_hours) > 0) return true;
+        if (!ticket.deadline || String(ticket.deadline).toLowerCase() === 'nan') return false;
+
+        const deadlineDate = parseDateString(ticket.deadline);
+        if (!deadlineDate) return false;
+
+        const st = String(ticket.status || '').toLowerCase();
+        const ct = String(ticket.closure_type || '').toLowerCase();
+        const isFinished = ['closed', 'declined', 'on hold', 'on-hold'].includes(st) || ['declined', 'on hold'].includes(ct);
+
+        if (targetMode === 'active') {
+            if (isFinished) return false;
+            return getISTDate() > deadlineDate;
         }
+
+        if (isFinished) {
+            const finishStr = ticket.closed_timestamp || ticket.solved_timestamp;
+            if (finishStr && String(finishStr).toLowerCase() !== 'nan') {
+                const finishDate = parseDateString(finishStr);
+                if (finishDate) return finishDate > deadlineDate;
+            }
+            return ticket.SLA_Breach === true || ticket.SLA_Breach === 'True';
+        }
+
+        return getISTDate() > deadlineDate;
     };
 
     // Calculate Manager KPI stat counts
@@ -393,13 +441,13 @@ const ManagerDashboard = ({ user, setUser }) => {
             else if (stat === 'on hold') increment('onHold', lvl);
             else if (stat === 'escalated' || stat === 'escalation resolved') increment('escalated', lvl);
 
-            if (isLate(t) || t.SLA_Breach === 'True' || t.SLA_Breach === true) {
+            if (isLate(t, slaBreachMode)) {
                 increment('late', lvl);
             }
         });
 
         return counts;
-    }, [teamAgeingData]);
+    }, [teamAgeingData, slaBreachMode]);
 
     const renderTooltip = (levels) => {
         const entries = Object.entries(levels || {});
@@ -443,6 +491,7 @@ const ManagerDashboard = ({ user, setUser }) => {
                             onChange={(e) => setSearchQuery(e.target.value)}
                             style={{ padding: '6px 12px', fontSize: '11px', width: '220px', margin: 0 }}
                         />
+                        <SLABreachModeToggle mode={slaBreachMode} onChange={setSlaBreachMode} />
                         <button
                             className="btn p-2 text-xs flex-row gap-1"
                             onClick={() => setShowKPIs(prev => !prev)}
@@ -463,6 +512,9 @@ const ManagerDashboard = ({ user, setUser }) => {
                         </button>
                         <button className="btn badge-success p-2 text-xs flex-row gap-1" onClick={handleDownloadCSV} title="Export CSV Report">
                             <Download size={13} /> Export CSV
+                        </button>
+                        <button className="btn badge-primary p-2 text-xs flex-row gap-1" onClick={() => exportExecutivePDF(filteredAgeing, {})} title="Export PDF Executive Summary">
+                            <FileText size={13} /> Export PDF
                         </button>
                     </div>
                 </div>
@@ -518,7 +570,9 @@ const ManagerDashboard = ({ user, setUser }) => {
                         </div>
                         <div className="card kpi-card kpi-sla kpi-orange" style={{ padding: '12px 8px', margin: 0, textAlign: 'center', borderTop: '2px solid #F7941D', background: 'linear-gradient(180deg, rgba(247,148,29,0.25) 0%, rgba(247,148,29,0) 100%)' }}>
                             {renderTooltip(managerKPI.late.levels)}
-                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>SLA Breach</p>
+                            <p style={{ color: '#a1a1aa', fontSize: '10px', textTransform: 'uppercase', fontWeight: '600', margin: '0 0 4px 0' }}>
+                                {slaBreachMode === 'all' ? 'All-Time SLA Breach' : 'Live SLA Breach'}
+                            </p>
                             <h2 style={{ fontSize: '19px', margin: 0, color: '#fff' }}>{managerKPI.late.count}</h2>
                         </div>
                     </div>

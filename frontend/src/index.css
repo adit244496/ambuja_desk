@@ -99,24 +99,41 @@ body.light-mode textarea {
 }
 
 html {
-  zoom: 0.8;
-  height: 125vh;
-  width: 125vw;
-  overflow: hidden;
+  height: 100%;
+  width: 100%;
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
 }
 
 body,
 #root,
 .app-layout {
-  height: 125vh !important;
-  width: 125vw !important;
-  min-height: 125vh !important;
-  max-height: 125vh !important;
-  overflow: hidden;
+  height: 100% !important;
+  width: 100% !important;
+  min-height: 100vh !important;
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
+}
+
+@media (min-width: 1024px) {
+  html {
+    zoom: 0.8;
+    height: 125vh;
+    width: 125vw;
+    overflow: hidden;
+  }
+
+  body,
+  #root,
+  .app-layout {
+    height: 125vh !important;
+    width: 125vw !important;
+    min-height: 125vh !important;
+    max-height: 125vh !important;
+    overflow: hidden;
+  }
 }
 
 body {
@@ -134,7 +151,13 @@ body {
 
 .app-layout {
   background: transparent !important;
-  height: 125vh !important;
+  min-height: 100vh !important;
+}
+
+@media (min-width: 1024px) {
+  .app-layout {
+    height: 125vh !important;
+  }
 }
 
 header {
@@ -153,10 +176,19 @@ aside,
   backdrop-filter: var(--glass-blur) !important;
   -webkit-backdrop-filter: var(--glass-blur) !important;
   border-color: var(--border) !important;
-  height: 125vh !important;
-  min-height: 125vh !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
   top: 0 !important;
   left: 0 !important;
+}
+
+@media (min-width: 1024px) {
+
+  aside,
+  .sidebar {
+    height: 125vh !important;
+    min-height: 125vh !important;
+  }
 }
 
 .main-content,
@@ -1563,13 +1595,18 @@ body.light-mode button.btn.force-white-text * {
   .dashboard-wrapper,
   .content-wrapper {
     margin-left: 0 !important;
-    width: 100vw !important;
+    width: 100% !important;
     max-width: 100vw !important;
     padding-right: 0 !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
   }
 
   .app-main-content {
     padding: 12px 10px 8px 10px !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
   }
 
   /* 4. Header Navigation & Tagline */
@@ -1577,7 +1614,8 @@ body.light-mode button.btn.force-white-text * {
     padding: 0 8px !important;
     left: 0 !important;
     right: 0 !important;
-    width: 100vw !important;
+    width: 100% !important;
+    max-width: 100vw !important;
     box-sizing: border-box !important;
     display: flex !important;
     align-items: center !important;
@@ -1587,8 +1625,8 @@ body.light-mode button.btn.force-white-text * {
   }
 
   .header-greeting-text {
-    font-size: 11.5px !important;
-    max-width: 155px !important;
+    font-size: 11px !important;
+    max-width: 130px !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -1717,21 +1755,38 @@ body.light-mode button.btn.force-white-text * {
     line-height: 1.1 !important;
   }
 
-  /* 6. Ticket Details Side Panel (100vw Fullscreen on Mobile) */
+  /* 6. Ticket Details Side Panel (100vw Fullscreen on Mobile, strictly fixed to mobile viewport) */
   .slide-in-right-panel,
   .slide-out-right-panel,
   .ticket-details-panel {
+    position: fixed !important;
     width: 100vw !important;
     max-width: 100vw !important;
     left: 0 !important;
     right: 0 !important;
     top: 52px !important;
     bottom: 0 !important;
-    height: calc(100% - 52px) !important;
+    height: calc(100vh - 52px) !important;
+    height: calc(100dvh - 52px) !important;
+    max-height: calc(100dvh - 52px) !important;
     border-radius: 0 !important;
     border-left: none !important;
-    box-shadow: none !important;
-    z-index: 1100 !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4) !important;
+    z-index: 1250 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y !important;
+  }
+
+  .ticket-details-panel>div:last-child {
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y !important;
   }
 
   .side-panel-header {
@@ -1873,5 +1928,62 @@ body.light-mode button.btn.force-white-text * {
     flex: 1 1 calc(50% - 6px) !important;
     min-width: 120px !important;
     max-width: 100% !important;
+  }
+
+  /* 10. Mobile Modal Overlay & Dialog Responsiveness */
+  .glass-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    padding: 10px 6px !important;
+    overscroll-behavior: contain !important;
+    touch-action: none !important;
+  }
+
+  .glass-modal {
+    width: 96vw !important;
+    max-width: 96vw !important;
+    height: 85vh !important;
+    height: 85dvh !important;
+    max-height: 90vh !important;
+    max-height: 90dvh !important;
+    padding: 16px 12px !important;
+    border-radius: 12px !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y !important;
+  }
+
+  /* Lock background scrolling on mobile when modal or ticket details panel is open */
+  body:has(.ticket-details-panel),
+  body:has(.glass-overlay),
+  body.modal-open,
+  body.panel-open {
+    overflow: hidden !important;
+    touch-action: none !important;
+  }
+
+  body:has(.ticket-details-panel) .app-main-content,
+  body:has(.glass-overlay) .app-main-content,
+  body.modal-open .app-main-content,
+  body.panel-open .app-main-content {
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+
+  body:has(.ticket-details-panel) .ticket-details-panel,
+  body:has(.glass-overlay) .glass-overlay,
+  body:has(.glass-overlay) .glass-modal {
+    pointer-events: auto !important;
+  }
+
+  /* 11. Mobile Header SLA Toggle & Control Scaling */
+  .sla-toggle-container {
+    max-width: 100% !important;
+  }
+
+  .sla-toggle-container button {
+    padding: 3px 6px !important;
+    font-size: 9.5px !important;
   }
 }
