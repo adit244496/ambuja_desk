@@ -1570,12 +1570,23 @@ body.light-mode button.btn.force-white-text * {
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
+    overscroll-behavior: contain !important;
+    touch-action: none !important;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
 
   .sidebar.open {
     transform: translateX(0) !important;
     box-shadow: 4px 0 35px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  .sidebar-nav-scroll {
+    flex: 1 1 0% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y !important;
   }
 
   .mobile-sidebar-backdrop {
@@ -1588,6 +1599,8 @@ body.light-mode button.btn.force-white-text * {
     height: 100vh !important;
     height: 100dvh !important;
     z-index: 1090 !important;
+    touch-action: none !important;
+    overscroll-behavior: contain !important;
   }
 
   /* 3. Main Content & Layout Wrapper */
@@ -1954,23 +1967,34 @@ body.light-mode button.btn.force-white-text * {
     touch-action: pan-y !important;
   }
 
-  /* Lock background scrolling on mobile when modal or ticket details panel is open */
+  /* Lock background scrolling on mobile when modal, ticket details panel, or sidebar is open */
+  body:has(.sidebar.open),
   body:has(.ticket-details-panel),
   body:has(.glass-overlay),
   body.modal-open,
-  body.panel-open {
+  body.panel-open,
+  body.sidebar-open,
+  html.sidebar-open {
     overflow: hidden !important;
     touch-action: none !important;
   }
 
+  body:has(.sidebar.open) .dashboard-wrapper,
+  body:has(.sidebar.open) .app-main-content,
   body:has(.ticket-details-panel) .app-main-content,
   body:has(.glass-overlay) .app-main-content,
   body.modal-open .app-main-content,
-  body.panel-open .app-main-content {
+  body.panel-open .app-main-content,
+  body.sidebar-open .dashboard-wrapper,
+  body.sidebar-open .app-main-content {
     overflow: hidden !important;
     pointer-events: none !important;
   }
 
+  body:has(.sidebar.open) aside.sidebar,
+  body:has(.sidebar.open) .mobile-sidebar-backdrop,
+  body.sidebar-open aside.sidebar,
+  body.sidebar-open .mobile-sidebar-backdrop,
   body:has(.ticket-details-panel) .ticket-details-panel,
   body:has(.glass-overlay) .glass-overlay,
   body:has(.glass-overlay) .glass-modal {

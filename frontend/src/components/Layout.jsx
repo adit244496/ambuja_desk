@@ -86,6 +86,21 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
         return () => clearTimeout(timer);
     }, [location.pathname]);
 
+    // Lock background scrolling on mobile when sidebar is open
+    useEffect(() => {
+        if (isMobileMenuOpen) {
+            document.body.classList.add('sidebar-open');
+            document.documentElement.classList.add('sidebar-open');
+        } else {
+            document.body.classList.remove('sidebar-open');
+            document.documentElement.classList.remove('sidebar-open');
+        }
+        return () => {
+            document.body.classList.remove('sidebar-open');
+            document.documentElement.classList.remove('sidebar-open');
+        };
+    }, [isMobileMenuOpen]);
+
     // Dynamic Theme Variables for Native Elements - Flat 2.0
     const t = isDarkMode ? {
         bg: '#0b0f17',
@@ -414,7 +429,8 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                 backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 400' preserveAspectRatio='xMidYMax slice'%3E%3Cpath fill='rgba(255,255,255,0.04)' d='M10,400V250h20v-30h30v-40h20v70h30v-80h25v50h30v-20h35v200H10z'/%3E%3Cpath fill='rgba(255,255,255,0.06)' d='M0,400V280h25v-50h20v-20h35v70h15v-40h45v30h30v-10h30v190H0z'/%3E%3Cpath fill='rgba(255,255,255,0.08)' d='M0,400V310h30v-40h25v20h20v-60h30v80h25v-30h40v-20h30v150H0z'/%3E%3C/svg%3E")`,
                 backgroundPosition: 'bottom center', backgroundRepeat: 'no-repeat', backgroundSize: 'cover',
                 position: 'fixed', top: 0, bottom: 0, height: '100%', maxHeight: '100dvh', display: 'flex', flexDirection: 'column', zIndex: 1100, transition: 'background-color 0.3s, border-color 0.3s',
-                overflow: 'hidden' // Ensure the sun/moon don't peek outside when they drop down
+                overflow: 'hidden', // Ensure the sun/moon don't peek outside when they drop down
+                overscrollBehavior: 'contain'
             }}>
                 {/* CELESTIAL ANIMATION & GLOW */}
                 <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }}>
@@ -553,7 +569,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                     </p>
                 </div>
 
-                <div style={{ flex: '1 1 0', minHeight: 0, padding: '8px 13px', overflowY: 'auto', WebkitOverflowScrolling: 'touch', zIndex: 1, position: 'relative' }}>
+                <div className="sidebar-nav-scroll" style={{ flex: '1 1 0', minHeight: 0, padding: '8px 13px', overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y', zIndex: 1, position: 'relative' }}>
                     <p style={{ fontSize: '10px', fontWeight: '600', color: sb.textSub, marginBottom: '10px', marginTop: '8px', textTransform: 'uppercase', paddingLeft: '6px', letterSpacing: '0.05em' }}>
                         Navigation
                     </p>
@@ -677,6 +693,7 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                 <div
                     className="mobile-sidebar-backdrop"
                     onClick={() => setIsMobileMenuOpen(false)}
+                    onTouchMove={(e) => e.preventDefault()}
                     style={{
                         position: 'fixed',
                         top: 0,
@@ -687,7 +704,9 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
                         backdropFilter: 'blur(2px)',
                         WebkitBackdropFilter: 'blur(2px)',
                         zIndex: 1090,
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        touchAction: 'none',
+                        overscrollBehavior: 'contain'
                     }}
                 />
             )}

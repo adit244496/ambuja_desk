@@ -363,79 +363,96 @@ def auto_check_sla_breaches():
         tickets = db.query(Ticket).filter(Ticket.status.notin_(['Closed', 'Closed '])).all()
         
         for t in tickets:
-            status = str(t.status).strip().lower()
-            if status in ['closed', 'declined', 'on hold', 'on-hold']:
+            status = str(t.status or '').strip().lower()
+            closure_type = str(getattr(t, 'closure_type', '') or '').strip().lower()
+
+            # Tickets marked on hold, declined, closed, resolved, escalation resolved, or dormant escalated parents
+            # must NEVER receive periodic notices or trigger SLA breaches
+            if status in ['closed', 'declined', 'on hold', 'on-hold', 'resolved', 'escalation resolved', 'escalated']:
+                continue
+            if closure_type in ['declined', 'on hold', 'closed', 'accepted']:
                 continue
                 
-            if t.deadline and not t.sla_notified:
+            # Helper to resolve solver by employee_id or email
+            assigned_raw = str(t.assigned_to or '').strip()
+            solver = None
+            if assigned_raw and assigned_raw.lower() not in ['nan', 'none', '', 'unassigned']:
+                if '@' in assigned_raw:
+                    solver = db.query(User).filter(User.email.ilike(assigned_raw)).first()
+                else:
+                    solver = db.query(User).filter(User.employee_id == assigned_raw).first()
+
+            # --- PERIODIC NOTICES ---
+            # Rule: Only send periodic notice if NO status has been updated by solver (any level)
+            # for more than 1/3rd the time limit given.
+            if status == 'open' and t.deadline and t.timestamp:
                 try:
-                    deadline_time = datetime.strptime(t.deadline, "%d-%m-%Y %H:%M")
-                    loc_str = f" for {t.location.strip()}" if t.location and str(t.location).strip() and str(t.location).lower() != 'nan' else ""
+                    create_time = datetime.strptime(str(t.timestamp).strip(), "%d-%m-%Y %H:%M")
+                    deadline_time = datetime.strptime(str(t.deadline).strip(), "%d-%m-%Y %H:%M")
+                    total_duration_hours = (deadline_time - create_time).total_seconds() / 3600.0
                     
-                    if t.timestamp:
-                        try:
-                            create_time = datetime.strptime(t.timestamp, "%d-%m-%Y %H:%M")
-                            total_duration_hours = (deadline_time - create_time).total_seconds() / 3600
-                            
-                            if total_duration_hours > 72:
-                                elapsed_hours = (now - create_time).total_seconds() / 3600
-                                fraction = elapsed_hours / total_duration_hours if total_duration_hours > 0 else 0
+                    if total_duration_hours > 0:
+                        elapsed_hours = (now - create_time).total_seconds() / 3600.0
+                        fraction = elapsed_hours / total_duration_hours
+                        
+                        # Verify that no solver action/status update has occurred on this ticket
+                        has_status_update = db.query(TicketLog).filter(
+                            TicketLog.ticket_id == str(t.ticket_id),
+                            TicketLog.action.in_([
+                                'Status Update', 'Declined', 'On Hold', 'Resolved',
+                                'Escalated Ticket', 'Escalation Put On Hold', 'Escalation Declined',
+                                'Escalation Resolved', 'Resolution Accepted', 'Resolution Rejected',
+                                'Deadline Extended', 'Handover Requested'
+                            ])
+                        ).first() is not None
+                        
+                        if not has_status_update:
+                            loc_str = f" for {t.location.strip()}" if t.location and str(t.location).strip() and str(t.location).lower() != 'nan' else ""
+                            to_notify = []
+                            if solver:
+                                if solver.email: to_notify.append(solver.email)
+                                if getattr(solver, 'reporting_manager', None):
+                                    rm_id = str(solver.reporting_manager).strip()
+                                    if '@' not in rm_id:
+                                        match = db.query(User).filter_by(employee_id=rm_id).first()
+                                        if match and match.email:
+                                            to_notify.append(match.email)
+                                    else:
+                                        to_notify.append(rm_id)
+
+                            if fraction >= (1.0 / 3.0) and not getattr(t, 'notified_1_3', False):
+                                t.notified_1_3 = True
+                                if to_notify:
+                                    send_omni_blast(to_notify, f"Periodic Reminder (1/3 time elapsed): Ticket #{t.ticket_id} is awaiting initial solver action.", role_context='Solver', ticket_id=t.ticket_id, custom_subject=f"Reminder: Ticket #{t.ticket_id} is awaiting solver action{loc_str}")
+                                log_ticket_action(t.ticket_id, "SYSTEM", "Periodic Notice 1/3", "1/3 time elapsed with no solver status update - reminder sent to solver and RM")
                                 
-                                if fraction >= (1/3) and not getattr(t, 'notified_1_3', False):
-                                    t.notified_1_3 = True
-                                    solver = db.query(User).filter_by(employee_id=t.assigned_to).first()
-                                    if solver:
-                                        to_notify = []
-                                        if solver.email: to_notify.append(solver.email)
-                                        if getattr(solver, 'reporting_manager', None):
-                                             rm_id = solver.reporting_manager
-                                             if '@' not in str(rm_id):
-                                                 match = db.query(User).filter_by(employee_id=str(rm_id)).first()
-                                                 if match and match.email:
-                                                     to_notify.append(match.email)
-                                             else:
-                                                 to_notify.append(rm_id)
-                                        send_omni_blast(to_notify, f"Periodic Reminder (1/3 time elapsed): Ticket #{t.ticket_id} is still open.", role_context='Solver', ticket_id=t.ticket_id, custom_subject=f"Reminder: Ticket #{t.ticket_id} is still open{loc_str}")
-                                        log_ticket_action(t.ticket_id, "SYSTEM", "Periodic Notice 1/3", "1/3 time elapsed reminder sent to solver and RM")
-                                        
-                                if fraction >= (2/3) and not getattr(t, 'notified_2_3', False):
-                                    t.notified_2_3 = True
-                                    solver = db.query(User).filter_by(employee_id=t.assigned_to).first()
-                                    if solver:
-                                        to_notify = []
-                                        if solver.email: to_notify.append(solver.email)
-                                        if getattr(solver, 'reporting_manager', None):
-                                             rm_id = solver.reporting_manager
-                                             if '@' not in str(rm_id):
-                                                 match = db.query(User).filter_by(employee_id=str(rm_id)).first()
-                                                 if match and match.email:
-                                                     to_notify.append(match.email)
-                                             else:
-                                                 to_notify.append(rm_id)
-                                        send_omni_blast(to_notify, f"Periodic Reminder (2/3 time elapsed): Ticket #{t.ticket_id} is still open.", role_context='Solver', ticket_id=t.ticket_id, custom_subject=f"Reminder: Ticket #{t.ticket_id} is still open{loc_str}")
-                                        log_ticket_action(t.ticket_id, "SYSTEM", "Periodic Notice 2/3", "2/3 time elapsed reminder sent to solver and RM")
-                        except ValueError:
-                            pass
-                            
+                            if fraction >= (2.0 / 3.0) and not getattr(t, 'notified_2_3', False):
+                                t.notified_2_3 = True
+                                if to_notify:
+                                    send_omni_blast(to_notify, f"Periodic Reminder (2/3 time elapsed): Ticket #{t.ticket_id} is still awaiting initial solver action.", role_context='Solver', ticket_id=t.ticket_id, custom_subject=f"Reminder: Ticket #{t.ticket_id} is awaiting solver action{loc_str}")
+                                log_ticket_action(t.ticket_id, "SYSTEM", "Periodic Notice 2/3", "2/3 time elapsed with no solver status update - reminder sent to solver and RM")
+                except ValueError:
+                    pass
+
+            # --- SLA BREACH CHECK ---
+            # Only active 'open' or 'in progress' tickets can breach SLA
+            if t.deadline and not t.sla_notified and status in ['open', 'in progress']:
+                try:
+                    deadline_time = datetime.strptime(str(t.deadline).strip(), "%d-%m-%Y %H:%M")
                     if now > deadline_time:
                         t.sla_notified = True
-                        
+                        t.SLA_Breach = True
+                        loc_str = f" for {t.location.strip()}" if t.location and str(t.location).strip() and str(t.location).lower() != 'nan' else ""
                         log_ticket_action(t.ticket_id, "SYSTEM", "SLA Breach", "Deadline exceeded", "System automatically flagged SLA breach")
                         
-                        solver_email = None
-                        solver = db.query(User).filter_by(employee_id=t.assigned_to).first()
-                        
                         to_notify = [str(t.raised_by)]
-                        
                         if solver:
-                            solver_email = solver.email
-                            if solver_email:
-                                to_notify.append(solver_email)
+                            if solver.email:
+                                to_notify.append(solver.email)
                             if getattr(solver, 'reporting_manager', None):
                                 to_notify.append(solver.reporting_manager)
                         
                         to_notify.extend(admin_emails)
-                        
                         if t.notify_users:
                             cc_emails = [u.strip() for u in t.notify_users.split(',') if u.strip()]
                             to_notify.extend(cc_emails)
@@ -444,7 +461,7 @@ def auto_check_sla_breaches():
                         for u in to_notify:
                             if '@' not in str(u):
                                 match = db.query(User).filter_by(employee_id=str(u)).first()
-                                if match:
+                                if match and match.email:
                                     final_emails.append(match.email)
                             else:
                                 final_emails.append(u)
@@ -531,6 +548,10 @@ def sync_computed_ticket_metrics():
                     if completion_t and completion_t > deadline_time:
                         SLA_Breach = True
                         solver_delay = round((completion_t - deadline_time).total_seconds() / 3600.0, 2)
+                    elif status in ['on hold', 'on-hold', 'declined'] or closure_type in ['on hold', 'declined']:
+                        # On hold or declined within deadline should never be an SLA breach
+                        SLA_Breach = False
+                        solver_delay = 0.0
                     elif getattr(t, 'SLA_Breach', False) in [True, 'True']:
                         SLA_Breach = True
                         solver_delay = float(getattr(t, 'solver_delay_hours', 0.0) or 0.0)

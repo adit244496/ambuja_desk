@@ -467,7 +467,7 @@ def escalate_ticket():
             ticket_id=ticket.ticket_id,
             escalation_level=new_esc_level,
             raised_by=current_solver,
-            assigned_to=new_solver_emp_id,
+            assigned_to=target_emp_check if (target_emp_check and target_emp_check != 'Unassigned') else new_solver_emp_id,
             dept_assigned=new_dept,
             status='Open',
             original_raiser=orig_raiser,

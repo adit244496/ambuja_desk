@@ -269,18 +269,43 @@ const SolverDashboard = ({ user, setUser }) => {
         }
     };
 
+    const isAssignedToUser = (t, u) => {
+        if (!t || !u) return false;
+        const assignedRaw = String(t.assigned_to || '').trim().toLowerCase();
+        if (!assignedRaw || assignedRaw === 'nan' || assignedRaw === 'none' || assignedRaw === 'unassigned') return false;
+        const userEmpId = u.employee_id ? String(u.employee_id).trim().toLowerCase() : '';
+        const userEmail = u.email ? String(u.email).trim().toLowerCase() : '';
+        const userName = u.name ? String(u.name).trim().toLowerCase() : '';
+
+        if ((userEmpId && assignedRaw === userEmpId) ||
+            (userEmail && assignedRaw === userEmail) ||
+            (userName && assignedRaw === userName)) {
+            return true;
+        }
+
+        if (usersList && usersList.length > 0) {
+            const matchedUser = usersList.find(usr =>
+                (usr.employee_id && String(usr.employee_id).trim().toLowerCase() === assignedRaw) ||
+                (usr.email && String(usr.email).trim().toLowerCase() === assignedRaw)
+            );
+            if (matchedUser) {
+                const mEmp = matchedUser.employee_id ? String(matchedUser.employee_id).trim().toLowerCase() : '';
+                const mEmail = matchedUser.email ? String(matchedUser.email).trim().toLowerCase() : '';
+                if ((userEmpId && mEmp === userEmpId) || (userEmail && mEmail === userEmail)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const ticketId = params.get('ticket_id');
         if (ticketId && tickets.length > 0) {
-            const userEmpId = user?.employee_id ? String(user.employee_id).toLowerCase() : '';
-            const userEmail = user?.email ? String(user.email).toLowerCase() : '';
             // Prefer ticket matching current solver's assignment
-            const ticket = tickets.find(t => {
-                if (String(t.ticket_id) !== String(ticketId)) return false;
-                const assignedRaw = String(t.assigned_to || '').trim().toLowerCase();
-                return (userEmpId && assignedRaw === userEmpId) || (userEmail && assignedRaw === userEmail);
-            }) || tickets.find(t => String(t.ticket_id) === String(ticketId));
+            const userAssignedTicket = tickets.find(t => String(t.ticket_id) === String(ticketId) && isAssignedToUser(t, user));
+            const ticket = userAssignedTicket || tickets.slice().reverse().find(t => String(t.ticket_id) === String(ticketId));
 
             if (ticket) {
                 if (ticket.status === 'Escalated' || ticket.status === 'Escalation Resolved') {
@@ -294,7 +319,7 @@ const SolverDashboard = ({ user, setUser }) => {
                 navigate(location.pathname, { replace: true });
             }
         }
-    }, [location.search, tickets, user]);
+    }, [location.search, tickets, user, usersList]);
 
     const [ticketLogs, setTicketLogs] = useState([]);
     const [logsLoading, setLogsLoading] = useState(false);
@@ -809,18 +834,6 @@ const SolverDashboard = ({ user, setUser }) => {
 
     const handleUpdateFormChange = (ticketId, field, value) => {
         setUpdateForms(prev => ({ ...prev, [ticketId]: { ...prev[ticketId] || {}, [field]: value } }));
-    };
-
-    const isAssignedToUser = (t, u) => {
-        if (!t || !u) return false;
-        const assignedRaw = String(t.assigned_to || '').trim().toLowerCase();
-        if (!assignedRaw || assignedRaw === 'nan' || assignedRaw === 'none' || assignedRaw === 'unassigned') return false;
-        const userEmpId = u.employee_id ? String(u.employee_id).trim().toLowerCase() : '';
-        const userEmail = u.email ? String(u.email).trim().toLowerCase() : '';
-        const userName = u.name ? String(u.name).trim().toLowerCase() : '';
-        return (userEmpId && assignedRaw === userEmpId) ||
-            (userEmail && assignedRaw === userEmail) ||
-            (userName && assignedRaw === userName);
     };
 
     const myTasks = tickets.filter(t => {
