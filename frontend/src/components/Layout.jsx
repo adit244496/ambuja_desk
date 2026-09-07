@@ -101,6 +101,8 @@ const Layout = ({ children, user, setUser, sidebarTabs, activeTab, setActiveTab 
         };
     }, [isMobileMenuOpen]);
 
+
+
     // Dynamic Theme Variables for Native Elements - Flat 2.0
     const t = isDarkMode ? {
         bg: '#0b0f17',

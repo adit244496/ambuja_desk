@@ -1553,6 +1553,13 @@ body.light-mode button.btn.force-white-text * {
     -webkit-overflow-scrolling: touch;
   }
 
+  .page-transition {
+    animation: none !important;
+    transform: none !important;
+    filter: none !important;
+    will-change: auto !important;
+  }
+
   /* 2. Sidebar Navigation (Strictly fixed drawer on screen, touch scrolling for links, pinned logout) */
   aside,
   .sidebar {
@@ -1790,9 +1797,13 @@ body.light-mode button.btn.force-white-text * {
     flex-direction: column !important;
     overflow: hidden !important;
     overscroll-behavior: contain !important;
-    touch-action: pan-y !important;
+    touch-action: none !important;
   }
 
+  .ticket-details-panel-body,
+  .ticket-details-panel>div:nth-child(2),
+  .ticket-details-panel div[style*="overflowY: auto"],
+  .ticket-details-panel div[style*="overflow-y: auto"],
   .ticket-details-panel>div:last-child {
     flex: 1 1 0% !important;
     min-height: 0 !important;
@@ -1972,23 +1983,33 @@ body.light-mode button.btn.force-white-text * {
   body:has(.ticket-details-panel),
   body:has(.glass-overlay),
   body.modal-open,
+  html.modal-open,
   body.panel-open,
+  html.panel-open,
   body.sidebar-open,
   html.sidebar-open {
     overflow: hidden !important;
+    height: 100% !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
     touch-action: none !important;
   }
 
   body:has(.sidebar.open) .dashboard-wrapper,
   body:has(.sidebar.open) .app-main-content,
+  body:has(.ticket-details-panel) .dashboard-wrapper,
   body:has(.ticket-details-panel) .app-main-content,
+  body:has(.ticket-details-panel) .content-wrapper,
   body:has(.glass-overlay) .app-main-content,
   body.modal-open .app-main-content,
+  body.panel-open .dashboard-wrapper,
   body.panel-open .app-main-content,
+  body.panel-open .content-wrapper,
   body.sidebar-open .dashboard-wrapper,
   body.sidebar-open .app-main-content {
     overflow: hidden !important;
     pointer-events: none !important;
+    touch-action: none !important;
   }
 
   body:has(.sidebar.open) aside.sidebar,
@@ -1996,6 +2017,7 @@ body.light-mode button.btn.force-white-text * {
   body.sidebar-open aside.sidebar,
   body.sidebar-open .mobile-sidebar-backdrop,
   body:has(.ticket-details-panel) .ticket-details-panel,
+  body.panel-open .ticket-details-panel,
   body:has(.glass-overlay) .glass-overlay,
   body:has(.glass-overlay) .glass-modal {
     pointer-events: auto !important;

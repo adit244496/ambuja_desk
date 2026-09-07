@@ -873,7 +873,7 @@ const ViewerDashboard = ({ user, setUser }) => {
                                 <button onClick={() => setActiveDetailsTab('chat')} style={{ flex: 1, padding: '10px 4px', fontSize: '13px', fontWeight: '600', backgroundColor: 'transparent', color: activeDetailsTab === 'chat' ? '#3b82f6' : 'var(--text-main, #0f172a)', border: 'none', borderBottom: activeDetailsTab === 'chat' ? '2px solid #3b82f6' : '2px solid transparent', cursor: 'pointer', transition: 'all 0.2s', marginBottom: '-1px' }}><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><MessageSquare size={14} /> Chat</div></button>
                             </div>
                         </div>
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '24px', zIndex: 10, display: 'flex', flexDirection: 'column', background: 'transparent' }}>
+                        <div className="ticket-details-panel-body" style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y', padding: '24px', zIndex: 10, display: 'flex', flexDirection: 'column', background: 'transparent' }}>
                             {activeDetailsTab === 'chat' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative', zIndex: 10, height: '100%' }}>
                                     <div className="chat-container frosted-chat-box" style={{ flex: 1, overflowY: 'auto', padding: '12px', borderRadius: '5px', display: 'flex', flexDirection: 'column', gap: '12px' }}>

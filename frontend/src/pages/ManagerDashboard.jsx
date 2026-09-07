@@ -723,7 +723,7 @@ const ManagerDashboard = ({ user, setUser }) => {
                             </div>
                         </div>
 
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '24px', zIndex: 10, display: 'flex', flexDirection: 'column', background: 'transparent' }}>
+                        <div className="ticket-details-panel-body" style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y', padding: '24px', zIndex: 10, display: 'flex', flexDirection: 'column', background: 'transparent' }}>
                             {activeDetailsTab === 'details' && (
                                 <div style={{ paddingBottom: '20px' }}>
                                     <div className="ticket-info-grid" style={{ display: 'grid', gridTemplateColumns: isSidePanelExpanded ? 'repeat(4, 1fr)' : '1fr 1fr', gap: '14px', fontSize: '13px', color: '#71717a', marginBottom: '16px' }}>

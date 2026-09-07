@@ -346,6 +346,20 @@ const RequestorDashboard = ({ user, setUser }) => {
         }
     }, [selectedTicket, panelTicket]);
 
+    useEffect(() => {
+        if (panelTicket && !isClosing) {
+            document.body.classList.add('panel-open');
+            document.documentElement.classList.add('panel-open');
+        } else if (!panelTicket || isClosing) {
+            document.body.classList.remove('panel-open');
+            document.documentElement.classList.remove('panel-open');
+        }
+        return () => {
+            document.body.classList.remove('panel-open');
+            document.documentElement.classList.remove('panel-open');
+        };
+    }, [panelTicket, isClosing]);
+
     const [isSidePanelExpanded, setIsSidePanelExpanded] = useState(false);
     const [enlargedPreviewImage, setEnlargedPreviewImage] = useState(null);
     const [previewFile, setPreviewFile] = useState(null);
@@ -1488,7 +1502,7 @@ const RequestorDashboard = ({ user, setUser }) => {
                             </div>
                         </div>
 
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '24px', zIndex: 10, display: 'flex', flexDirection: 'column' }}>
+                        <div className="ticket-details-panel-body" style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y', padding: '24px', zIndex: 10, display: 'flex', flexDirection: 'column' }}>
 
                             {activeDetailsTab === 'chat' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative', zIndex: 10, height: '100%' }}>
