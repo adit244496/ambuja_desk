@@ -13,12 +13,28 @@ def hash_password(password):
 
 def get_actor_from_request(data=None):
     """Extracts actor identifier from payload data or request headers."""
+    # 1. Check explicit actor keys in payload data (never target subject keys like 'email' or 'employee_id')
     if data and isinstance(data, dict):
-        for key in ['admin_email', 'user_email', 'actor', 'email', 'employee_id']:
+        for key in ['admin_email', 'actor_email', 'user_email', 'actor', 'admin_emp_id', 'actor_emp_id']:
             val = data.get(key)
-            if val and str(val).strip() and str(val).strip() != 'Admin':
+            if val and str(val).strip() and str(val).strip().lower() not in ['admin', 'unknown admin']:
                 return str(val).strip()
-    return request.headers.get('X-User-Email') or request.headers.get('X-User-EmpId') or request.args.get('admin_email') or 'Admin'
+    
+    # 2. Check request headers populated by frontend Axios interceptor
+    header_email = request.headers.get('X-User-Email')
+    if header_email and str(header_email).strip():
+        return str(header_email).strip()
+
+    header_emp_id = request.headers.get('X-User-EmpId')
+    if header_emp_id and str(header_emp_id).strip():
+        return str(header_emp_id).strip()
+
+    # 3. Check query parameters
+    query_admin = request.args.get('admin_email') or request.args.get('user_email')
+    if query_admin and str(query_admin).strip():
+        return str(query_admin).strip()
+
+    return 'Admin'
 
 # --- USER MANAGEMENT ---
 @admin_bp.route('/api/admin/system_logs', methods=['GET'])
@@ -73,7 +89,7 @@ def create_user():
         )
         db.add(new_user)
         
-        admin_email = data.get('admin_email', 'Unknown Admin')
+        admin_email = get_actor_from_request(data)
         database.log_system_action(admin_email, 'Create User', data['email'], f"Created user {data['name']} as {data['role']}")
         
         db.commit()
@@ -106,8 +122,8 @@ def update_user():
         if not user:
             return jsonify({"error": "User not found"}), 404
             
-        admin_email = data.get('admin_email', 'Unknown Admin')
-        admin_user = db.query(User).filter(User.email == admin_email).first()
+        admin_email = get_actor_from_request(data)
+        admin_user = db.query(User).filter((User.email == admin_email) | (User.employee_id == admin_email)).first()
         admin_is_super = admin_user and admin_user.role in ['Superadmin', 'Super Admin']
         target_is_super = user.role in ['Superadmin', 'Super Admin']
 

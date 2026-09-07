@@ -687,8 +687,8 @@ const AdminDashboard = ({ user, setUser }) => {
     const handleLocSubmit = async (e) => {
         e.preventDefault();
         try {
-            if (locModalMode === 'add') { await createLocation(locFormData); alert('Location added successfully.'); }
-            else { await updateLocation(locFormData); alert('Location updated successfully.'); }
+            if (locModalMode === 'add') { await createLocation({ ...locFormData, admin_email: user?.email }); alert('Location added successfully.'); }
+            else { await updateLocation({ ...locFormData, admin_email: user?.email }); alert('Location updated successfully.'); }
             setIsLocModalOpen(false); setSelectedMasterLocations([]); loadSystemData();
         } catch (err) { alert(err.response?.data?.error || "Failed to save location."); }
     };
@@ -2683,13 +2683,13 @@ const AdminDashboard = ({ user, setUser }) => {
                                 <h3 style={{ margin: '0 0 16px 0', fontSize: '16px' }}>{projectModalMode === 'add' ? 'Register New Project' : 'Edit Project Details'}</h3>
                                 <form onSubmit={async (e) => {
                                     e.preventDefault();
-                                    const payload = { project_name: projectFormData.project };
+                                    const payload = { project_name: projectFormData.project, admin_email: user?.email };
                                     try {
                                         if (projectModalMode === 'add') {
                                             await createProject(payload);
                                             alert('Project added successfully.');
                                         } else {
-                                            await updateProject({ ...payload, old_project_name: selectedProjects[0] });
+                                            await updateProject({ ...payload, old_project_name: selectedProjects[0], admin_email: user?.email });
                                             alert('Project updated successfully.');
                                             setSelectedProjects([]);
                                         }
@@ -2713,10 +2713,10 @@ const AdminDashboard = ({ user, setUser }) => {
                                 <form onSubmit={async (e) => {
                                     e.preventDefault();
                                     const autoLocation = `${(locFormData.project || '').trim()}-${(locFormData.tower || '').trim()}`;
-                                    const payload = { ...locFormData, location: autoLocation };
+                                    const payload = { ...locFormData, location: autoLocation, admin_email: user?.email };
                                     try {
                                         if (locModalMode === 'add') { await createLocation(payload); alert('Location added successfully.'); }
-                                        else { await updateLocation({ ...payload, old_location: locFormData.location }); alert('Location updated successfully.'); }
+                                        else { await updateLocation({ ...payload, old_location: locFormData.location, admin_email: user?.email }); alert('Location updated successfully.'); }
                                         setIsLocModalOpen(false); setSelectedMasterLocations([]); loadSystemData();
                                     } catch (err) { alert(err.response?.data?.error || "Failed to save location."); }
                                 }}>
@@ -2746,8 +2746,8 @@ const AdminDashboard = ({ user, setUser }) => {
                                 <form onSubmit={async (e) => {
                                     e.preventDefault();
                                     try {
-                                        if (deptModalMode === 'add') { await createDepartment(deptFormData); alert('Department added successfully.'); }
-                                        else { await updateDepartment(deptFormData); alert('Department updated successfully.'); }
+                                        if (deptModalMode === 'add') { await createDepartment({ ...deptFormData, admin_email: user?.email }); alert('Department added successfully.'); }
+                                        else { await updateDepartment({ ...deptFormData, admin_email: user?.email }); alert('Department updated successfully.'); }
                                         setIsDeptModalOpen(false); setSelectedMasterDepartments([]); loadSystemData();
                                     } catch (err) { alert(err.response?.data?.error || "Failed to save department."); }
                                 }}>
@@ -2771,8 +2771,8 @@ const AdminDashboard = ({ user, setUser }) => {
                                         return;
                                     }
                                     try {
-                                        if (issueModalMode === 'add') { if (categoryModalType === 'issue') { await createIssueCategory({ issue_name: issueFormData['Issue Category'] }); } else { await createActivityCategory({ activity_name: issueFormData['Activity Category'] }); } alert('Category added successfully.'); }
-                                        else { if (categoryModalType === 'issue') { await updateIssueCategory({ old_issue_name: issueFormData['old_Issue Category'], issue_name: issueFormData['Issue Category'] }); } else { await updateActivityCategory({ old_activity_name: issueFormData['old_Activity Category'], activity_name: issueFormData['Activity Category'] }); } alert('Category updated successfully.'); }
+                                        if (issueModalMode === 'add') { if (categoryModalType === 'issue') { await createIssueCategory({ issue_name: issueFormData['Issue Category'], admin_email: user?.email }); } else { await createActivityCategory({ activity_name: issueFormData['Activity Category'], admin_email: user?.email }); } alert('Category added successfully.'); }
+                                        else { if (categoryModalType === 'issue') { await updateIssueCategory({ old_issue_name: issueFormData['old_Issue Category'], issue_name: issueFormData['Issue Category'], admin_email: user?.email }); } else { await updateActivityCategory({ old_activity_name: issueFormData['old_Activity Category'], activity_name: issueFormData['Activity Category'], admin_email: user?.email }); } alert('Category updated successfully.'); }
                                         setIsIssueModalOpen(false); setSelectedMasterIssues([]); setSelectedMasterActivities([]); loadSystemData();
                                     } catch (err) { alert(err.response?.data?.error || "Failed to save category."); }
                                 }}>

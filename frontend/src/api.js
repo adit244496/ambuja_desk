@@ -18,6 +18,13 @@ api.interceptors.request.use((config) => {
             const parsed = JSON.parse(stored);
             if (parsed.email) config.headers['X-User-Email'] = parsed.email;
             if (parsed.employee_id) config.headers['X-User-EmpId'] = parsed.employee_id;
+
+            // If data is an object and not FormData, ensure admin_email is attached if missing
+            if (config.data && typeof config.data === 'object' && !(config.data instanceof FormData) && !Array.isArray(config.data)) {
+                if (!config.data.admin_email && parsed.email) {
+                    config.data.admin_email = parsed.email;
+                }
+            }
         }
     } catch (e) { }
     return config;
@@ -313,8 +320,14 @@ export const getImportTemplateUrl = (entity) => {
 };
 
 export const uploadImportFile = async (entity, file) => {
+    let currentUser = null;
+    try { currentUser = JSON.parse(sessionStorage.getItem('ticket_user')); } catch (e) { }
     const formData = new FormData();
     formData.append('file', file);
+    if (currentUser) {
+        if (currentUser.email) formData.append('admin_email', currentUser.email);
+        else if (currentUser.employee_id) formData.append('admin_email', currentUser.employee_id);
+    }
     const response = await api.post(`/admin/import/${entity}`, formData, {
         headers: {
             'Content-Type': 'multipart/form-data',

@@ -144,11 +144,23 @@ def log_ticket_action(ticket_id, user_identifier, action, details="", remarks=""
         db.rollback()
 
 def log_system_action(actor_email, action, target="", details=""):
-    """Logs system management actions into SystemLog, resolving actor email/id to role (e.g. Super Admin or Admin) where possible."""
+    """Logs system management actions into SystemLog, resolving actor identity to rich format: Name [Role] (email)."""
     db = Session()
     try:
         actor_display = str(actor_email or '').strip()
-        # If actor identifier is an email or emp_id or raw 'Admin', try to resolve to actual user role
+
+        # If actor identifier is generic or missing, try to resolve from active request headers
+        try:
+            from flask import has_request_context, request
+            if has_request_context():
+                if not actor_display or actor_display.lower() in ['admin', 'unknown admin', 'none', 'superadmin']:
+                    req_actor = request.headers.get('X-User-Email') or request.headers.get('X-User-EmpId') or request.args.get('admin_email')
+                    if req_actor and str(req_actor).strip():
+                        actor_display = str(req_actor).strip()
+        except Exception:
+            pass
+
+        # If actor identifier is an email or emp_id, resolve to rich user identity
         if actor_display and actor_display not in ['System', 'Cron']:
             try:
                 matched_user = db.query(User).filter(
@@ -156,8 +168,16 @@ def log_system_action(actor_email, action, target="", details=""):
                 ).first()
                 if matched_user:
                     role_name = matched_user.role or 'Admin'
-                    # Format as 'Super Admin' or 'Admin' if standard, or role name
-                    actor_display = role_name
+                    user_name = (matched_user.name or '').strip()
+                    user_email = (matched_user.email or '').strip()
+                    if user_name and user_email:
+                        actor_display = f"{user_name} [{role_name}] ({user_email})"
+                    elif user_name:
+                        actor_display = f"{user_name} [{role_name}]"
+                    elif user_email:
+                        actor_display = f"{user_email} [{role_name}]"
+                    else:
+                        actor_display = f"{role_name} ({actor_display})"
             except Exception:
                 pass
 
@@ -535,8 +555,16 @@ def sync_computed_ticket_metrics():
             else:
                 age_hours = round((now - true_ticket_start).total_seconds() / 3600.0, 2) if true_ticket_start else None
                 
+            if age_hours is not None:
+                age_hours = max(0.0, age_hours)
+
             res_hours = round((solved_time - true_ticket_start).total_seconds() / 3600.0, 2) if (solved_time and true_ticket_start and is_globally_finished) else None
+            if res_hours is not None:
+                res_hours = max(0.0, res_hours)
+
             turn_hours = round((closed_time - true_ticket_start).total_seconds() / 3600.0, 2) if (closed_time and true_ticket_start and is_globally_finished) else None
+            if turn_hours is not None:
+                turn_hours = max(0.0, turn_hours)
             
             SLA_Breach = False
             solver_delay = 0.0

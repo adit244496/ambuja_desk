@@ -55,7 +55,7 @@ def delete_tickets():
         db.commit()
 
         # Create system log entry
-        actor_ident = data.get('user_email') or request.headers.get('X-User-Email') or 'Super Admin'
+        actor_ident = data.get('user_email') or data.get('admin_email') or request.headers.get('X-User-Email') or request.headers.get('X-User-EmpId') or 'Super Admin'
         target_str = ', '.join([str(tid) for tid in ticket_ids[:5]]) + ('...' if len(ticket_ids) > 5 else '')
         database.log_system_action(
             actor_ident,
@@ -967,7 +967,7 @@ def update_ticket_status():
                 
             tz_ist = timezone(timedelta(hours=5, minutes=30))
             now_ist = datetime.now(tz_ist).replace(tzinfo=None)
-            new_ts_str = f"{now_ist.strftime('%d-%m-%Y')} 23:59"
+            new_ts_str = f"{now_ist.strftime('%d-%m-%Y %H:%M')}"
             new_dl_dt = now_ist + timedelta(days=duration_days)
             new_dl_str = f"{new_dl_dt.strftime('%d-%m-%Y')} 23:59"
             
@@ -1303,7 +1303,7 @@ def approve_handover():
                 
             tz_ist = timezone(timedelta(hours=5, minutes=30))
             now_ist = datetime.now(tz_ist).replace(tzinfo=None)
-            new_ts_str = f"{now_ist.strftime('%d-%m-%Y')} 23:59"
+            new_ts_str = f"{now_ist.strftime('%d-%m-%Y %H:%M')}"
             new_dl_dt = now_ist + timedelta(days=duration_days)
             new_dl_str = f"{new_dl_dt.strftime('%d-%m-%Y')} 23:59"
             
@@ -1389,7 +1389,7 @@ def admin_reassign_ticket():
     new_solver = data.get('new_solver')
     new_dept = data.get('department')
     reason = data.get('reason', 'Force reassigned by Admin')
-    admin_email = data.get('admin_email') or data.get('user_email') or 'Admin'
+    admin_email = data.get('admin_email') or data.get('user_email') or request.headers.get('X-User-Email') or request.headers.get('X-User-EmpId') or 'Admin'
 
     if not ticket_id or not new_solver:
         return jsonify({"error": "Ticket ID and target solver are required."}), 400
@@ -1430,7 +1430,7 @@ def admin_reassign_ticket():
         tz_ist = timezone(timedelta(hours=5, minutes=30))
         now_ist = datetime.now(tz_ist).replace(tzinfo=None)
 
-        new_ts_str = f"{now_ist.strftime('%d-%m-%Y')} 23:59"
+        new_ts_str = f"{now_ist.strftime('%d-%m-%Y %H:%M')}"
         new_dl_dt = now_ist + timedelta(days=duration_days)
         new_dl_str = f"{new_dl_dt.strftime('%d-%m-%Y')} 23:59"
 
