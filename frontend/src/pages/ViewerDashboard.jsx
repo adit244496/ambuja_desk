@@ -279,7 +279,7 @@ const ViewerDashboard = ({ user, setUser }) => {
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const ticketId = params.get('ticket_id');
-        if (ticketId && ticketsList.length > 0 && !selectedTicket) {
+        if (ticketId && ticketsList.length > 0) {
             const ticket = ticketsList.find(t => String(t.ticket_id) === String(ticketId));
             if (ticket) {
                 setActiveTab('ageing');

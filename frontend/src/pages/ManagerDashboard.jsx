@@ -200,6 +200,18 @@ const ManagerDashboard = ({ user, setUser }) => {
         }
     };
 
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const ticketId = params.get('ticket_id');
+        if (ticketId && ageingData.length > 0) {
+            const ticket = ageingData.find(t => String(t.ticket_id) === String(ticketId));
+            if (ticket) {
+                handleTicketClick(ticket);
+                navigate(location.pathname, { replace: true });
+            }
+        }
+    }, [location.search, ageingData]);
+
     const fetchComments = async (ticketId) => {
         try {
             const res = await api.get(`/tickets/${ticketId}/comments`);

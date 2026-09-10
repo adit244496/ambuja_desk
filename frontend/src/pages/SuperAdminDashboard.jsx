@@ -310,8 +310,14 @@ const SuperAdminDashboard = ({ user, setUser }) => {
     const [cannedSortField, setCannedSortField] = useState('id');
     const [cannedSortOrder, setCannedSortOrder] = useState('asc');
 
-    // Auto-close ticket details pane when changing tabs
+    const selectingTicketFromUrlRef = useRef(false);
+
+    // Auto-close ticket details pane when changing tabs (except when navigating to a ticket from URL)
     useEffect(() => {
+        if (selectingTicketFromUrlRef.current) {
+            selectingTicketFromUrlRef.current = false;
+            return;
+        }
         setSelectedTicket(null);
         setIsSidePanelExpanded(false);
     }, [activeTab, masterControlTab]);
@@ -602,15 +608,18 @@ const SuperAdminDashboard = ({ user, setUser }) => {
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const ticketId = params.get('ticket_id');
-        if (ticketId && ticketsList.length > 0 && !selectedTicket) {
+        if (ticketId && ticketsList.length > 0) {
             const ticket = ticketsList.find(t => String(t.ticket_id) === String(ticketId));
             if (ticket) {
-                setActiveTab('ageing');
+                if (activeTab !== 'ageing') {
+                    selectingTicketFromUrlRef.current = true;
+                    setActiveTab('ageing');
+                }
                 handleAgeingTicketClick(ticket);
                 navigate(location.pathname, { replace: true });
             }
         }
-    }, [location.search, ticketsList]);
+    }, [location.search, ticketsList, activeTab]);
 
     const handleAgeingTicketClick = async (ticket) => {
         setSelectedTicket(ticket);

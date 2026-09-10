@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api';
 import { Calendar, ChevronLeft, ChevronRight, X, Circle, Clock, Ticket } from 'lucide-react';
 
@@ -8,6 +8,7 @@ import { getISTDate } from '../utils/dateUtils';
 
 const CalendarModal = ({ user, isDarkMode, onClose }) => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [currentDate, setCurrentDate] = useState(getISTDate());
@@ -99,6 +100,70 @@ const CalendarModal = ({ user, isDarkMode, onClose }) => {
     };
 
     const selectedTickets = getTicketsForDay(selectedDate);
+
+    const navigateToTicket = (t) => {
+        onClose();
+        const currentPath = location.pathname;
+
+        // If the user is an admin or super admin, or currently on that workspace, always route to their dashboard
+        if (currentPath.startsWith('/superadmin') || user.role === 'Superadmin' || user.role === 'Super Admin') {
+            navigate(`/superadmin?ticket_id=${t.ticket_id}`);
+            return;
+        }
+        if (currentPath.startsWith('/admin') || user.role === 'Admin') {
+            navigate(`/admin?ticket_id=${t.ticket_id}`);
+            return;
+        }
+        if (currentPath.startsWith('/viewer') || user.role === 'Viewer') {
+            navigate(`/viewer?ticket_id=${t.ticket_id}`);
+            return;
+        }
+        if (currentPath.startsWith('/manager') || user.role === 'Manager' || user.role === 'RM') {
+            navigate(`/manager?ticket_id=${t.ticket_id}`);
+            return;
+        }
+        const userEmail = String(user.email || '').toLowerCase().trim();
+        const userEmpId = String(user.employee_id || '').toLowerCase().trim();
+        const userName = String(user.name || '').toLowerCase().trim();
+        const userDept = String(user.department || '').toLowerCase().trim();
+
+        const raiserFull = String(t.raised_by || '').toLowerCase() + ' ' + String(t.employee_id || '').toLowerCase() + ' ' + String(t.raiser_name || '').toLowerCase() + ' ' + String(t.original_raiser || '').toLowerCase();
+        const isRequestor = (userEmail !== '' && raiserFull.includes(userEmail)) || 
+                            (userEmpId !== '' && raiserFull.includes(userEmpId)) || 
+                            (userName !== '' && raiserFull.includes(userName));
+
+        const assignedToFull = String(t.assigned_to || '').toLowerCase();
+        const ticketDept = String(t.dept_assigned || '').toLowerCase().trim();
+        const isSolver = (userEmail !== '' && assignedToFull.includes(userEmail)) || 
+                         (userEmpId !== '' && assignedToFull.includes(userEmpId)) || 
+                         (userName !== '' && assignedToFull.includes(userName)) || 
+                         (ticketDept !== '' && ticketDept === userDept && userDept !== 'unassigned');
+
+        if (currentPath.startsWith('/solver')) {
+            if (!isSolver && isRequestor) {
+                navigate(`/requestor?ticket_id=${t.ticket_id}`);
+            } else {
+                navigate(`/solver?ticket_id=${t.ticket_id}`);
+            }
+            return;
+        }
+
+        if (currentPath.startsWith('/requestor')) {
+            if (!isRequestor && isSolver) {
+                navigate(`/solver?ticket_id=${t.ticket_id}`);
+            } else {
+                navigate(`/requestor?ticket_id=${t.ticket_id}`);
+            }
+            return;
+        }
+
+        // For standard users from other pages:
+        if (isSolver) {
+            navigate(`/solver?ticket_id=${t.ticket_id}`);
+        } else {
+            navigate(`/requestor?ticket_id=${t.ticket_id}`);
+        }
+    };
 
     const modalContent = (
         <div className="glass-overlay" style={{
@@ -222,42 +287,8 @@ const CalendarModal = ({ user, isDarkMode, onClose }) => {
                                         <h4 style={{ fontSize: '11px', color: '#ef4444', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                             <Clock size={12} /> Pending Deadlines ({selectedTickets.due.length})
                                         </h4>
-                                        {selectedTickets.due.map(t => {
-                                            const handleTicketClick = () => {
-                                                onClose();
-                                                const userEmail = String(user.email || '').toLowerCase().trim();
-                                                const userEmpId = String(user.employee_id || '').toLowerCase().trim();
-                                                const userName = String(user.name || '').toLowerCase().trim();
-                                                const userDept = String(user.department || '').toLowerCase().trim();
-
-                                                const raiserFull = String(t.raised_by || '').toLowerCase() + ' ' + String(t.employee_id || '').toLowerCase() + ' ' + String(t.raiser_name || '').toLowerCase();
-                                                const isRequestor = (userEmail !== '' && raiserFull.includes(userEmail)) || 
-                                                                    (userEmpId !== '' && raiserFull.includes(userEmpId)) || 
-                                                                    (userName !== '' && raiserFull.includes(userName));
-
-                                                const assignedToFull = String(t.assigned_to || '').toLowerCase();
-                                                const ticketDept = String(t.dept_assigned || '').toLowerCase().trim();
-                                                const isSolver = (userEmail !== '' && assignedToFull.includes(userEmail)) || 
-                                                                 (userEmpId !== '' && assignedToFull.includes(userEmpId)) || 
-                                                                 (userName !== '' && assignedToFull.includes(userName)) || 
-                                                                 (ticketDept !== '' && ticketDept === userDept && userDept !== 'unassigned');
-
-                                                if (isRequestor) {
-                                                    navigate(`/requestor?ticket_id=${t.ticket_id}`);
-                                                } else if (isSolver) {
-                                                    navigate(`/solver?ticket_id=${t.ticket_id}`);
-                                                } else if (user.role === 'Superadmin' || user.role === 'Super Admin') {
-                                                    navigate(`/superadmin?ticket_id=${t.ticket_id}`);
-                                                } else if (user.role === 'Admin') {
-                                                    navigate(`/admin?ticket_id=${t.ticket_id}`);
-                                                } else if (user.role === 'Viewer') {
-                                                    navigate(`/viewer?ticket_id=${t.ticket_id}`);
-                                                } else {
-                                                    navigate(`/requestor?ticket_id=${t.ticket_id}`);
-                                                }
-                                            };
-                                            return (
-                                            <div key={`due-${t.ticket_id}`} onClick={handleTicketClick} style={{ 
+                                        {selectedTickets.due.map(t => (
+                                            <div key={`due-${t.ticket_id}`} onClick={() => navigateToTicket(t)} style={{ 
                                                 padding: '10px', backgroundColor: isDarkMode ? '#27272a' : '#ffffff', 
                                                 border: `1px solid ${isDarkMode ? '#3f3f46' : '#e2e8f0'}`, borderRadius: '6px', marginBottom: '8px', cursor: 'pointer' 
                                             }}>
@@ -268,7 +299,7 @@ const CalendarModal = ({ user, isDarkMode, onClose }) => {
                                                 <div style={{ fontSize: '10px', color: isDarkMode ? '#d4d4d4' : '#0f172a', marginBottom: '4px' }}>{t.issue_category}</div>
                                                 <div style={{ fontSize: '10px', color: isDarkMode ? '#a1a1aa' : '#64748b' }}>Assigned: {t.dept_assigned}</div>
                                             </div>
-                                        )})}
+                                        ))}
                                     </div>
                                 )}
 
@@ -277,42 +308,8 @@ const CalendarModal = ({ user, isDarkMode, onClose }) => {
                                         <h4 style={{ fontSize: '11px', color: '#10b981', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                             <Ticket size={12} /> Tickets Created ({selectedTickets.created.length})
                                         </h4>
-                                        {selectedTickets.created.map(t => {
-                                            const handleTicketClick = () => {
-                                                onClose();
-                                                const userEmail = String(user.email || '').toLowerCase().trim();
-                                                const userEmpId = String(user.employee_id || '').toLowerCase().trim();
-                                                const userName = String(user.name || '').toLowerCase().trim();
-                                                const userDept = String(user.department || '').toLowerCase().trim();
-
-                                                const raiserFull = String(t.raised_by || '').toLowerCase() + ' ' + String(t.employee_id || '').toLowerCase() + ' ' + String(t.raiser_name || '').toLowerCase();
-                                                const isRequestor = (userEmail !== '' && raiserFull.includes(userEmail)) || 
-                                                                    (userEmpId !== '' && raiserFull.includes(userEmpId)) || 
-                                                                    (userName !== '' && raiserFull.includes(userName));
-
-                                                const assignedToFull = String(t.assigned_to || '').toLowerCase();
-                                                const ticketDept = String(t.dept_assigned || '').toLowerCase().trim();
-                                                const isSolver = (userEmail !== '' && assignedToFull.includes(userEmail)) || 
-                                                                 (userEmpId !== '' && assignedToFull.includes(userEmpId)) || 
-                                                                 (userName !== '' && assignedToFull.includes(userName)) || 
-                                                                 (ticketDept !== '' && ticketDept === userDept && userDept !== 'unassigned');
-
-                                                if (isRequestor) {
-                                                    navigate(`/requestor?ticket_id=${t.ticket_id}`);
-                                                } else if (isSolver) {
-                                                    navigate(`/solver?ticket_id=${t.ticket_id}`);
-                                                } else if (user.role === 'Superadmin' || user.role === 'Super Admin') {
-                                                    navigate(`/superadmin?ticket_id=${t.ticket_id}`);
-                                                } else if (user.role === 'Admin') {
-                                                    navigate(`/admin?ticket_id=${t.ticket_id}`);
-                                                } else if (user.role === 'Viewer') {
-                                                    navigate(`/viewer?ticket_id=${t.ticket_id}`);
-                                                } else {
-                                                    navigate(`/requestor?ticket_id=${t.ticket_id}`);
-                                                }
-                                            };
-                                            return (
-                                            <div key={`created-${t.ticket_id}`} onClick={handleTicketClick} style={{ 
+                                        {selectedTickets.created.map(t => (
+                                            <div key={`created-${t.ticket_id}`} onClick={() => navigateToTicket(t)} style={{ 
                                                 padding: '10px', backgroundColor: isDarkMode ? '#27272a' : '#ffffff', 
                                                 border: `1px solid ${isDarkMode ? '#3f3f46' : '#e2e8f0'}`, borderRadius: '6px', marginBottom: '8px', cursor: 'pointer' 
                                             }}>
@@ -323,7 +320,7 @@ const CalendarModal = ({ user, isDarkMode, onClose }) => {
                                                 <div style={{ fontSize: '10px', color: isDarkMode ? '#d4d4d4' : '#0f172a', marginBottom: '4px' }}>{t.issue_category}</div>
                                                 <div style={{ fontSize: '10px', color: isDarkMode ? '#a1a1aa' : '#64748b' }}>Raiser: {t.raiser_name || t.raised_by}</div>
                                             </div>
-                                        )})}
+                                        ))}
                                     </div>
                                 )}
                             </div>
