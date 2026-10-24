@@ -290,6 +290,7 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
                         <th>Level</th>
                         <th>Severity</th>
                         <th>Status</th>
+                        <th>Raised On</th>
                         <th>Target Deadline</th>
                         <th>SLA Breach</th>
                         <th>Age (Days)</th>
@@ -312,6 +313,7 @@ export const exportExecutivePDF = (tickets, filters = {}) => {
                                 <td>${t.escalation_level || 'L1'}</td>
                                 <td>${t.severity || 'Normal'}</td>
                                 <td>${t.status}</td>
+                                <td>${t.timestamp || '-'}</td>
                                 <td>${t.deadline || '-'}</td>
                                 <td class="${isBreach ? 'badge-breach' : 'badge-success'}">${isBreach ? 'BREACHED' : 'On Track'}</td>
                                 <td>${formatDays(t.ticket_age_hours)}</td>

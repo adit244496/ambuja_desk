@@ -14,6 +14,8 @@ import DocumentPreview from '../components/DocumentPreview';
 import AttachmentBadge from '../components/AttachmentBadge';
 import SLACountdownBadge from '../components/SLACountdownBadge';
 import SLABreachModeToggle from '../components/SLABreachModeToggle';
+import { ColumnFilterRow, ColumnFilterToggle } from '../components/ColumnFilters';
+import { applyColumnFilters, getAgeingFilterColumns, countActiveColumnFilters, useColumnFiltersEnabled } from '../utils/columnFilters';
 import { exportExecutivePDF, exportExecutiveCSV } from '../utils/exportExecutiveReports';
 import { parseDateToTimestamp, parseDateString, getISTDate } from '../utils/dateUtils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -371,6 +373,8 @@ const SuperAdminDashboard = ({ user, setUser }) => {
     const [ageingSearch, setAgeingSearch] = useState('');
     const [ageingSearchConstraint, setAgeingSearchConstraint] = useState('all');
     const [isAgeingExpanded, setIsAgeingExpanded] = useState(false);
+    const [ageingColFilters, setAgeingColFilters] = useState({});
+    const [showColFilters, toggleColFilters] = useColumnFiltersEnabled();
     const [showAdvancedAgeing, setShowAdvancedAgeing] = useState(false);
     const [advAgeingDept, setAdvAgeingDept] = useState('');
     const [advAgeingStatus, setAdvAgeingStatus] = useState('');
@@ -654,7 +658,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
 
     // --- CSV DOWNLOAD EXPORTER ---
     const handleDownloadCSV = () => {
-        exportExecutiveCSV(filteredAgeing, {}, usersList);
+        exportExecutiveCSV(columnFilteredAgeing, {}, usersList);
     };
 
     const handleDownloadSystemLogsCSV = () => {
@@ -1184,7 +1188,8 @@ const SuperAdminDashboard = ({ user, setUser }) => {
             assigned_by: String(formatSolverDetails(a.assigned_by) || a.assigned_by || ''),
             assigned_to: String(formatSolverDetails(a.assigned_to) || a.assigned_to || ''),
             description: String(a.description || ''),
-            escalation_level: String(a.escalation_level || '')
+            escalation_level: String(a.escalation_level || ''),
+            timestamp: String(a.timestamp || '').split(' ')[0]
         };
 
         let matchBasic = false;
@@ -1204,7 +1209,8 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                 matchStartOfWord(fields.assigned_by, q) ||
                 matchStartOfWord(fields.assigned_to, q) ||
                 matchStartOfWord(fields.description, q) ||
-                matchStartOfWord(fields.escalation_level, q)
+                matchStartOfWord(fields.escalation_level, q) ||
+                matchStartOfWord(fields.timestamp, q)
             );
         }
 
@@ -1232,8 +1238,12 @@ const SuperAdminDashboard = ({ user, setUser }) => {
         }
     };
 
+    const ageingFilterColumns = getAgeingFilterColumns({ formatPerson: formatSolverDetails, getDelayDays: getDisplayDelayDays });
+    const columnFilteredAgeing = applyColumnFilters(filteredAgeing, ageingFilterColumns, showColFilters ? ageingColFilters : {});
+    const activeAgeingFilterCount = countActiveColumnFilters(ageingFilterColumns, ageingColFilters);
+
     const sortedAgeing = useMemo(() => {
-        let result = [...filteredAgeing];
+        let result = [...columnFilteredAgeing];
         if (ageingSortField) {
             result.sort((a, b) => {
                 let valA = a[ageingSortField];
@@ -1251,7 +1261,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                     return ageingSortOrder === 'asc' ? numA - numB : numB - numA;
                 }
 
-                if (ageingSortField === 'deadline') {
+                if (['deadline', 'timestamp'].includes(ageingSortField)) {
                     const timeA = parseDateToTimestamp(valA);
                     const timeB = parseDateToTimestamp(valB);
                     return ageingSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
@@ -1264,7 +1274,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
             });
         }
         return result;
-    }, [filteredAgeing, ageingSortField, ageingSortOrder]);
+    }, [columnFilteredAgeing, ageingSortField, ageingSortOrder]);
 
 
     const globalKPI = useMemo(() => {
@@ -1562,6 +1572,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                             <option value="status">Status</option>
                                             <option value="assigned_by">Assigned By</option>
                                             <option value="assigned_to">Assigned To</option>
+                                            <option value="timestamp">Raised On</option>
                                         </select>
                                         <input
                                             type="text"
@@ -1571,6 +1582,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                             onChange={(e) => setAgeingSearch(e.target.value)}
                                             style={{ padding: '4px 8px', fontSize: '11px', width: '160px', margin: 0, height: '28px' }}
                                         />
+                                        <ColumnFilterToggle enabled={showColFilters} onToggle={toggleColFilters} onClear={() => setAgeingColFilters({})} activeCount={activeAgeingFilterCount} />
                                     </div>
                                     {(user.role === 'Superadmin' || user.role === 'Super Admin') && (
                                         <button
@@ -1593,7 +1605,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                     <button className="btn badge-success p-2 text-xs flex-row gap-1" onClick={handleDownloadCSV} style={{ whiteSpace: 'nowrap' }} title="Download CSV Report">
                                         <Download size={11} /> CSV Report
                                     </button>
-                                    <button className="btn p-2 text-xs flex-row gap-1" onClick={() => exportExecutivePDF(filteredAgeing)} style={{ whiteSpace: 'nowrap', backgroundColor: 'rgba(239,68,68,0.2)', color: '#ef4444' }} title="Export PDF Report">
+                                    <button className="btn p-2 text-xs flex-row gap-1" onClick={() => exportExecutivePDF(columnFilteredAgeing)} style={{ whiteSpace: 'nowrap', backgroundColor: 'rgba(239,68,68,0.2)', color: '#ef4444' }} title="Export PDF Report">
                                         <FileText size={11} /> PDF Report
                                     </button>
                                     <button className="btn p-2 text-xs flex-row gap-1" onClick={() => setIsAgeingExpanded(!isAgeingExpanded)} style={{ whiteSpace: 'nowrap', backgroundColor: 'var(--bg-subtle)' }} title={isAgeingExpanded ? "Restore" : "Expand Fullscreen"}>
@@ -1603,17 +1615,17 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
                                 <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
-                                    <table className="data-table ageing-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                                    <table className="data-table ageing-table has-column-filters" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                                         <thead>
                                             <tr>
                                                 {(user.role === 'Superadmin' || user.role === 'Super Admin') && (
                                                     <th style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 'bold', width: '36px' }}>
                                                         <input
                                                             type="checkbox"
-                                                            checked={filteredAgeing.length > 0 && selectedAgeingTickets.length === new Set(filteredAgeing.map(t => t.ticket_id)).size}
+                                                            checked={columnFilteredAgeing.length > 0 && selectedAgeingTickets.length === new Set(columnFilteredAgeing.map(t => t.ticket_id)).size}
                                                             onChange={(e) => {
                                                                 if (e.target.checked) {
-                                                                    setSelectedAgeingTickets(Array.from(new Set(filteredAgeing.map(t => t.ticket_id))));
+                                                                    setSelectedAgeingTickets(Array.from(new Set(columnFilteredAgeing.map(t => t.ticket_id))));
                                                                 } else {
                                                                     setSelectedAgeingTickets([]);
                                                                 }
@@ -1638,6 +1650,9 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                                     Location {ageingSortField === 'location' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                 </th>
                                                 <th style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 'bold' }}>Image</th>
+                                                <th onClick={() => handleAgeingSortClick('timestamp')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Raised Date">
+                                                    Raised On {ageingSortField === 'timestamp' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
+                                                </th>
                                                 <th onClick={() => handleAgeingSortClick('deadline')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Target Deadline">
                                                     Deadline {ageingSortField === 'deadline' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                 </th>
@@ -1669,10 +1684,11 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                                     Delay {ageingSortField === 'solver_delay_hours' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}
                                                 </th>
                                             </tr>
+                                            {showColFilters && <ColumnFilterRow columns={ageingFilterColumns} rows={filteredAgeing} filters={ageingColFilters} onChange={setAgeingColFilters} leadingCells={(user.role === 'Superadmin' || user.role === 'Super Admin') ? 1 : 0} />}
                                         </thead>
                                         <tbody>
                                             {sortedAgeing.length === 0 ? (
-                                                <tr><td colSpan="18" className="text-center p-4 text-muted">No records found.</td></tr>
+                                                <tr><td colSpan="19" className="text-center p-4 text-muted">No records found.</td></tr>
                                             ) : (
                                                 sortedAgeing.map((a, index) => {
                                                     const isGrouped = index > 0 && a.ticket_id === sortedAgeing[index - 1].ticket_id;
@@ -1725,6 +1741,7 @@ const SuperAdminDashboard = ({ user, setUser }) => {
                                                             <td style={{ padding: '12px 8px', textAlign: 'center' }}>
                                                                 <AttachmentBadge attachment={a.attachment} />
                                                             </td>
+                                                            <td style={{ padding: '12px 8px', whiteSpace: 'nowrap' }} title={a.timestamp || ''}>{a.timestamp ? String(a.timestamp).split(' ')[0] : '-'}</td>
                                                             <td style={{ padding: '12px 8px' }}>
                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                                                     <span>{a.deadline ? String(a.deadline).split(' ')[0] : '-'}</span>

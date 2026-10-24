@@ -7,6 +7,8 @@ import DocumentPreview from '../components/DocumentPreview';
 import AttachmentBadge from '../components/AttachmentBadge';
 import SLACountdownBadge from '../components/SLACountdownBadge';
 import SLABreachModeToggle from '../components/SLABreachModeToggle';
+import { ColumnFilterRow, ColumnFilterToggle } from '../components/ColumnFilters';
+import { applyColumnFilters, getTicketFilterColumns, countActiveColumnFilters, useColumnFiltersEnabled } from '../utils/columnFilters';
 import CannedResponseSelector from '../components/CannedResponseSelector';
 import { getISTDate, getISTMinDatetime, getISTTomorrowDate, parseDateToTimestamp, parseDateString } from '../utils/dateUtils';
 
@@ -1007,6 +1009,11 @@ const SolverDashboard = ({ user, setUser }) => {
 
     const [ticketSortField, setTicketSortField] = useState('ticket_id');
     const [ticketSortOrder, setTicketSortOrder] = useState('desc');
+    const [ticketColFilters, setTicketColFilters] = useState({});
+    const [showColFilters, toggleColFilters] = useColumnFiltersEnabled();
+    const tabColFilters = ticketColFilters[activeTab] || {};
+    const setTabColFilters = (filters) => setTicketColFilters(prev => ({ ...prev, [activeTab]: filters }));
+    const ticketFilterColumns = getTicketFilterColumns({ formatPerson: getSolverDetails });
 
     const handleTicketSortClick = (field) => {
         if (ticketSortField === field) {
@@ -1018,7 +1025,7 @@ const SolverDashboard = ({ user, setUser }) => {
     };
 
     const renderTicketTable = (ticketList) => {
-        let sorted = [...ticketList];
+        let sorted = [...applyColumnFilters(ticketList, ticketFilterColumns, showColFilters ? tabColFilters : {})];
         if (ticketSortField) {
             sorted.sort((a, b) => {
                 let valA = a[ticketSortField];
@@ -1040,7 +1047,7 @@ const SolverDashboard = ({ user, setUser }) => {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
                 <div className="table-responsive" style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
-                    <table className="data-table ageing-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                    <table className="data-table ageing-table has-column-filters" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                         <thead>
                             <tr>
                                 <th onClick={() => handleTicketSortClick('ticket_id')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Ticket ID">
@@ -1070,6 +1077,7 @@ const SolverDashboard = ({ user, setUser }) => {
                                     Status {ticketSortField === 'status' ? (ticketSortOrder === 'asc' ? '▲' : '▼') : ''}
                                 </th>
                             </tr>
+                            {showColFilters && <ColumnFilterRow columns={ticketFilterColumns} rows={ticketList} filters={tabColFilters} onChange={setTabColFilters} />}
                         </thead>
                         <tbody>
                             {sorted.length === 0 ? (
@@ -1155,6 +1163,7 @@ const SolverDashboard = ({ user, setUser }) => {
                             <button className="btn badge-primary p-2 text-xs flex-row gap-1" onClick={() => setShowAdvancedSearchModal(true)} style={{ whiteSpace: 'nowrap', borderRadius: '20px' }}>
                                 <Filter size={14} /> Advanced Search & Filter
                             </button>
+                            <ColumnFilterToggle enabled={showColFilters} onToggle={toggleColFilters} onClear={() => setTicketColFilters({})} activeCount={countActiveColumnFilters(ticketFilterColumns, tabColFilters)} />
                         </div>
                     </div>
                 </div>

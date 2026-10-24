@@ -1182,6 +1182,92 @@ html body .dashboard-wrapper table .sticky-thead {
   background-color: transparent !important;
 }
 
+/* Tables with a column filter row: stick the whole header block so both rows stay visible */
+html body table.has-column-filters thead,
+html body .dashboard-wrapper table.has-column-filters thead {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 100 !important;
+}
+
+html body table.has-column-filters th,
+html body .dashboard-wrapper table.has-column-filters th {
+  position: static !important;
+}
+
+.column-filter-row th {
+  padding: 4px !important;
+  font-weight: normal !important;
+}
+
+.column-filter-control {
+  width: 100%;
+  min-width: 60px;
+  height: 24px;
+  padding: 2px 5px;
+  margin: 0;
+  font-size: 10px;
+  color: var(--text-main);
+  background-color: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.column-filter-control:focus {
+  border-color: var(--border-focus);
+}
+
+.column-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 7px;
+  margin: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background-color: var(--bg-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.column-filter-toggle:hover {
+  color: var(--text-main);
+  border-color: var(--border-focus);
+}
+
+.column-filter-toggle.active {
+  background-color: rgba(59, 130, 246, 0.15);
+  border-color: var(--border-focus);
+  color: var(--primary);
+}
+
+.column-filter-toggle-count {
+  font-size: 9px;
+  font-weight: bold;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 8px;
+  background-color: var(--primary);
+  color: #fff;
+}
+
+.column-filter-daterange {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 112px;
+}
+
+body:not(.light-mode) .column-filter-control[type="date"] {
+  color-scheme: dark;
+}
+
 /* FADE IN ANIMATION FOR BACKDROPS */
 @keyframes fadeIn {
   from {

@@ -7,6 +7,8 @@ import AttachmentBadge from '../components/AttachmentBadge';
 import AdminAnalytics from '../components/AdminAnalytics';
 import SLACountdownBadge from '../components/SLACountdownBadge';
 import SLABreachModeToggle from '../components/SLABreachModeToggle';
+import { ColumnFilterRow, ColumnFilterToggle } from '../components/ColumnFilters';
+import { applyColumnFilters, getAgeingFilterColumns, countActiveColumnFilters, useColumnFiltersEnabled } from '../utils/columnFilters';
 import { exportExecutivePDF, exportExecutiveCSV } from '../utils/exportExecutiveReports';
 import { parseDateToTimestamp, parseDateString, getISTDate } from '../utils/dateUtils';
 import { TrendingUp, Clock, Download, FileText, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, PlusCircle, ArrowUpRight, RefreshCw, CheckCircle, UserPlus, Activity, Maximize2, Minimize2, MessageSquare, Filter } from 'lucide-react';
@@ -176,6 +178,8 @@ const ViewerDashboard = ({ user, setUser }) => {
     const [ageingSearch, setAgeingSearch] = useState('');
     const [ageingSearchConstraint, setAgeingSearchConstraint] = useState('all');
     const [isAgeingExpanded, setIsAgeingExpanded] = useState(false);
+    const [ageingColFilters, setAgeingColFilters] = useState({});
+    const [showColFilters, toggleColFilters] = useColumnFiltersEnabled();
     const [showAdvancedAgeing, setShowAdvancedAgeing] = useState(false);
     const [advAgeingDept, setAdvAgeingDept] = useState('');
     const [advAgeingIssueCat, setAdvAgeingIssueCat] = useState('');
@@ -302,7 +306,7 @@ const ViewerDashboard = ({ user, setUser }) => {
     };
 
     const handleDownloadCSV = () => {
-        exportExecutiveCSV(filteredAgeing, {}, usersList);
+        exportExecutiveCSV(columnFilteredAgeing, {}, usersList);
     };
 
 
@@ -361,7 +365,8 @@ const ViewerDashboard = ({ user, setUser }) => {
                 assigned_by: String(formatSolverDetails(a.assigned_by) || a.assigned_by || ''),
                 assigned_to: String(formatSolverDetails(a.assigned_to) || a.assigned_to || ''),
                 description: String(a.description || ''),
-                escalation_level: String(a.escalation_level || '')
+                escalation_level: String(a.escalation_level || ''),
+                timestamp: String(a.timestamp || '').split(' ')[0]
             };
 
             let matchBasic = false;
@@ -381,7 +386,8 @@ const ViewerDashboard = ({ user, setUser }) => {
                     matchStartOfWord(fields.assigned_by, q) ||
                     matchStartOfWord(fields.assigned_to, q) ||
                     matchStartOfWord(fields.description, q) ||
-                    matchStartOfWord(fields.escalation_level, q)
+                    matchStartOfWord(fields.escalation_level, q) ||
+                    matchStartOfWord(fields.timestamp, q)
                 );
             }
 
@@ -412,8 +418,12 @@ const ViewerDashboard = ({ user, setUser }) => {
         }
     };
 
+    const ageingFilterColumns = getAgeingFilterColumns({ formatPerson: formatSolverDetails, getDelayDays: getDisplayDelayDays });
+    const columnFilteredAgeing = applyColumnFilters(filteredAgeing, ageingFilterColumns, showColFilters ? ageingColFilters : {});
+    const activeAgeingFilterCount = countActiveColumnFilters(ageingFilterColumns, ageingColFilters);
+
     const sortedAgeing = useMemo(() => {
-        let result = [...filteredAgeing];
+        let result = [...columnFilteredAgeing];
         if (ageingSortField) {
             result.sort((a, b) => {
                 let valA = a[ageingSortField];
@@ -431,7 +441,7 @@ const ViewerDashboard = ({ user, setUser }) => {
                     return ageingSortOrder === 'asc' ? numA - numB : numB - numA;
                 }
 
-                if (ageingSortField === 'deadline') {
+                if (['deadline', 'timestamp'].includes(ageingSortField)) {
                     const timeA = parseDateToTimestamp(valA);
                     const timeB = parseDateToTimestamp(valB);
                     return ageingSortOrder === 'asc' ? timeA - timeB : timeB - timeA;
@@ -444,7 +454,7 @@ const ViewerDashboard = ({ user, setUser }) => {
             });
         }
         return result;
-    }, [filteredAgeing, ageingSortField, ageingSortOrder]);
+    }, [columnFilteredAgeing, ageingSortField, ageingSortOrder]);
 
     const globalKPI = useMemo(() => {
         const counts = {
@@ -662,6 +672,7 @@ const ViewerDashboard = ({ user, setUser }) => {
                                         <option value="status">Status</option>
                                         <option value="assigned_by">Assigned By</option>
                                         <option value="assigned_to">Assigned To</option>
+                                        <option value="timestamp">Raised On</option>
                                     </select>
                                     <input
                                         type="text"
@@ -671,6 +682,7 @@ const ViewerDashboard = ({ user, setUser }) => {
                                         onChange={(e) => setAgeingSearch(e.target.value)}
                                         style={{ padding: '4px 8px', fontSize: '11px', width: '160px', margin: 0, height: '28px' }}
                                     />
+                                    <ColumnFilterToggle enabled={showColFilters} onToggle={toggleColFilters} onClear={() => setAgeingColFilters({})} activeCount={activeAgeingFilterCount} />
                                 </div>
                                 <button className="btn badge-primary p-2 text-xs flex-row gap-1" onClick={() => setShowAdvancedSearchModal(true)} style={{ whiteSpace: 'nowrap', borderRadius: '20px', height: '28px', padding: '0 12px' }}>
                                     <Filter size={14} /> Advanced Search & Filter
@@ -678,7 +690,7 @@ const ViewerDashboard = ({ user, setUser }) => {
                                 <button className="btn badge-success p-2 text-xs flex-row gap-1" onClick={handleDownloadCSV} style={{ whiteSpace: 'nowrap' }} title="Download CSV Report">
                                     <Download size={11} /> CSV Report
                                 </button>
-                                <button className="btn p-2 text-xs flex-row gap-1" onClick={() => exportExecutivePDF(filteredAgeing)} style={{ whiteSpace: 'nowrap', backgroundColor: 'rgba(239,68,68,0.2)', color: '#ef4444' }} title="Export PDF Report">
+                                <button className="btn p-2 text-xs flex-row gap-1" onClick={() => exportExecutivePDF(columnFilteredAgeing)} style={{ whiteSpace: 'nowrap', backgroundColor: 'rgba(239,68,68,0.2)', color: '#ef4444' }} title="Export PDF Report">
                                     <FileText size={11} /> PDF Report
                                 </button>
                                 <button className="btn p-2 text-xs flex-row gap-1" onClick={() => setIsAgeingExpanded(!isAgeingExpanded)} style={{ whiteSpace: 'nowrap', backgroundColor: 'var(--bg-subtle)' }} title={isAgeingExpanded ? "Restore" : "Expand Fullscreen"}>
@@ -689,7 +701,7 @@ const ViewerDashboard = ({ user, setUser }) => {
 
                         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
                             <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
-                                <table className="data-table ageing-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                                <table className="data-table ageing-table has-column-filters" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                                     <thead>
                                         <tr>
                                             <th onClick={() => handleAgeingSortClick('ticket_id')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Ticket ID">ID {ageingSortField === 'ticket_id' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}</th>
@@ -699,6 +711,7 @@ const ViewerDashboard = ({ user, setUser }) => {
                                             <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Description</th>
                                             <th onClick={() => handleAgeingSortClick('location')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Location">Location {ageingSortField === 'location' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}</th>
                                             <th style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 'bold' }}>Image</th>
+                                            <th onClick={() => handleAgeingSortClick('timestamp')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Raised Date">Raised On {ageingSortField === 'timestamp' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}</th>
                                             <th onClick={() => handleAgeingSortClick('deadline')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Target Deadline">Deadline {ageingSortField === 'deadline' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}</th>
                                             <th onClick={() => handleAgeingSortClick('escalation_level')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Escalation Level">Level {ageingSortField === 'escalation_level' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}</th>
                                             <th onClick={() => handleAgeingSortClick('severity')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Severity">Severity {ageingSortField === 'severity' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}</th>
@@ -710,10 +723,11 @@ const ViewerDashboard = ({ user, setUser }) => {
                                             <th onClick={() => handleAgeingSortClick('total_turnaround_hours')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Total Turnaround">Turnaround {ageingSortField === 'total_turnaround_hours' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}</th>
                                             <th onClick={() => handleAgeingSortClick('solver_delay_hours')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold', cursor: 'pointer', userSelect: 'none' }} title="Sort by Delay">Delay {ageingSortField === 'solver_delay_hours' ? (ageingSortOrder === 'asc' ? '▲' : '▼') : ''}</th>
                                         </tr>
+                                        {showColFilters && <ColumnFilterRow columns={ageingFilterColumns} rows={filteredAgeing} filters={ageingColFilters} onChange={setAgeingColFilters} />}
                                     </thead>
                                     <tbody>
                                         {sortedAgeing.length === 0 ? (
-                                            <tr><td colSpan="17" className="text-center p-4 text-muted">No records found.</td></tr>
+                                            <tr><td colSpan="18" className="text-center p-4 text-muted">No records found.</td></tr>
                                         ) : (
                                             sortedAgeing.map((a, index) => {
                                                 const isGrouped = index > 0 && a.ticket_id === sortedAgeing[index - 1].ticket_id;
@@ -752,6 +766,7 @@ const ViewerDashboard = ({ user, setUser }) => {
                                                         <td style={{ padding: '12px 8px', textAlign: 'center' }}>
                                                             <AttachmentBadge attachment={a.attachment} />
                                                         </td>
+                                                        <td style={{ padding: '12px 8px', whiteSpace: 'nowrap' }} title={a.timestamp || ''}>{a.timestamp ? String(a.timestamp).split(' ')[0] : '-'}</td>
                                                         <td style={{ padding: '12px 8px' }}>
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                                                 <span>{a.deadline ? String(a.deadline).split(' ')[0] : '-'}</span>

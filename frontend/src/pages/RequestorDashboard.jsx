@@ -7,6 +7,8 @@ import DocumentPreview from '../components/DocumentPreview';
 import AttachmentBadge from '../components/AttachmentBadge';
 import SLACountdownBadge from '../components/SLACountdownBadge';
 import SLABreachModeToggle from '../components/SLABreachModeToggle';
+import { ColumnFilterRow, ColumnFilterToggle } from '../components/ColumnFilters';
+import { applyColumnFilters, getTicketFilterColumns, countActiveColumnFilters, useColumnFiltersEnabled } from '../utils/columnFilters';
 import { getISTDate, getISTMinDatetime, getISTTomorrowDate, parseDateString } from '../utils/dateUtils';
 
 // --- COLLAPSIBLE TIMELINE NODE ---
@@ -460,6 +462,8 @@ const RequestorDashboard = ({ user, setUser }) => {
     const [advStatus, setAdvStatus] = useState('');
     const [advSeverity, setAdvSeverity] = useState('');
     const [advLevel, setAdvLevel] = useState('');
+    const [ticketColFilters, setTicketColFilters] = useState({});
+    const [showColFilters, toggleColFilters] = useColumnFiltersEnabled();
 
     const formatDatetimeLocal = (date) => {
         const d = new Date(date);
@@ -952,10 +956,14 @@ const RequestorDashboard = ({ user, setUser }) => {
         );
     };
 
-    const renderTicketTable = (ticketList) => (
+    const ticketFilterColumns = getTicketFilterColumns({ formatPerson: getSolverDetails });
+
+    const renderTicketTable = (allTickets) => {
+        const ticketList = applyColumnFilters(allTickets, ticketFilterColumns, showColFilters ? ticketColFilters : {});
+        return (
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
             <div className="table-responsive" style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
-                <table className="data-table ageing-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                <table className="data-table ageing-table has-column-filters" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                     <thead>
                         <tr>
                             <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Ticket ID</th>
@@ -969,6 +977,7 @@ const RequestorDashboard = ({ user, setUser }) => {
                             <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Severity</th>
                             <th style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 'bold' }}>Status</th>
                         </tr>
+                        {showColFilters && <ColumnFilterRow columns={ticketFilterColumns} rows={allTickets} filters={ticketColFilters} onChange={setTicketColFilters} />}
                     </thead>
                     <tbody>
                         {ticketList.length === 0 ? (
@@ -1042,7 +1051,8 @@ const RequestorDashboard = ({ user, setUser }) => {
                 </table>
             </div>
         </div>
-    );
+        );
+    };
 
     const handleTabChange = (newTab) => {
         setActiveTab(newTab);
@@ -1080,9 +1090,12 @@ const RequestorDashboard = ({ user, setUser }) => {
                                 {showKPIs ? 'Hide KPIs' : 'Show KPIs'}
                             </button>
                             {activeTab === 'history' && (
-                                <button className="btn badge-primary p-2 text-xs flex-row gap-1" onClick={() => setShowAdvancedSearchModal(true)} style={{ whiteSpace: 'nowrap', borderRadius: '20px' }}>
-                                    <Filter size={14} /> Advanced Search & Filter
-                                </button>
+                                <>
+                                    <button className="btn badge-primary p-2 text-xs flex-row gap-1" onClick={() => setShowAdvancedSearchModal(true)} style={{ whiteSpace: 'nowrap', borderRadius: '20px' }}>
+                                        <Filter size={14} /> Advanced Search & Filter
+                                    </button>
+                                    <ColumnFilterToggle enabled={showColFilters} onToggle={toggleColFilters} onClear={() => setTicketColFilters({})} activeCount={countActiveColumnFilters(ticketFilterColumns, ticketColFilters)} />
+                                </>
                             )}
                         </div>
                     </div>

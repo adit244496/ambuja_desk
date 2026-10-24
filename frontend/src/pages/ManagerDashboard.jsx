@@ -7,6 +7,8 @@ import DocumentPreview from '../components/DocumentPreview';
 import AttachmentBadge from '../components/AttachmentBadge';
 import SLACountdownBadge from '../components/SLACountdownBadge';
 import SLABreachModeToggle from '../components/SLABreachModeToggle';
+import { ColumnFilterRow, ColumnFilterToggle } from '../components/ColumnFilters';
+import { applyColumnFilters, getAgeingFilterColumns, countActiveColumnFilters, useColumnFiltersEnabled } from '../utils/columnFilters';
 import { exportExecutiveCSV, exportExecutivePDF } from '../utils/exportExecutiveReports';
 import { parseDateString, getISTDate } from '../utils/dateUtils';
 
@@ -159,6 +161,8 @@ const ManagerDashboard = ({ user, setUser }) => {
     const [logsLoading, setLogsLoading] = useState(false);
     const [previewUrl, setPreviewUrl] = useState(null);
     const [isAgeingExpanded, setIsAgeingExpanded] = useState(false);
+    const [ageingColFilters, setAgeingColFilters] = useState({});
+    const [showColFilters, toggleColFilters] = useColumnFiltersEnabled();
     const [isSidePanelExpanded, setIsSidePanelExpanded] = useState(false);
     const [activeDetailsTab, setActiveDetailsTab] = useState('details');
     const [slaBreachMode, setSlaBreachMode] = useState('active'); // 'active' (Live / Active Breach) or 'all' (All-Time SLA Breach)
@@ -353,6 +357,10 @@ const ManagerDashboard = ({ user, setUser }) => {
         }
     };
 
+    const ageingFilterColumns = getAgeingFilterColumns({ formatPerson: formatSolverDetails, getDelayDays: getDisplayDelayDays });
+    const columnFilteredAgeing = applyColumnFilters(filteredAgeing, ageingFilterColumns, showColFilters ? ageingColFilters : {});
+    const activeAgeingFilterCount = countActiveColumnFilters(ageingFilterColumns, ageingColFilters);
+
     const isLate = (ticket, targetMode = slaBreachMode) => {
         if (!ticket) return false;
         if (ticket.solver_delay_hours !== undefined && ticket.solver_delay_hours !== null && Number(ticket.solver_delay_hours) > 0) return true;
@@ -477,7 +485,7 @@ const ManagerDashboard = ({ user, setUser }) => {
     };
 
     const handleDownloadCSV = () => {
-        exportExecutiveCSV(filteredAgeing, {}, usersList);
+        exportExecutiveCSV(columnFilteredAgeing, {}, usersList);
     };
 
     return (
@@ -503,6 +511,7 @@ const ManagerDashboard = ({ user, setUser }) => {
                             onChange={(e) => setSearchQuery(e.target.value)}
                             style={{ padding: '6px 12px', fontSize: '11px', width: '220px', margin: 0 }}
                         />
+                        <ColumnFilterToggle enabled={showColFilters} onToggle={toggleColFilters} onClear={() => setAgeingColFilters({})} activeCount={activeAgeingFilterCount} />
                         <SLABreachModeToggle mode={slaBreachMode} onChange={setSlaBreachMode} />
                         <button
                             className="btn p-2 text-xs flex-row gap-1"
@@ -525,7 +534,7 @@ const ManagerDashboard = ({ user, setUser }) => {
                         <button className="btn badge-success p-2 text-xs flex-row gap-1" onClick={handleDownloadCSV} title="Export CSV Report">
                             <Download size={13} /> Export CSV
                         </button>
-                        <button className="btn badge-primary p-2 text-xs flex-row gap-1" onClick={() => exportExecutivePDF(filteredAgeing, {})} title="Export PDF Executive Summary">
+                        <button className="btn badge-primary p-2 text-xs flex-row gap-1" onClick={() => exportExecutivePDF(columnFilteredAgeing, {})} title="Export PDF Executive Summary">
                             <FileText size={13} /> Export PDF
                         </button>
                     </div>
@@ -605,7 +614,7 @@ const ManagerDashboard = ({ user, setUser }) => {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
                         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
-                            <table className="data-table ageing-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                            <table className="data-table ageing-table has-column-filters" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                                 <thead>
                                     <tr>
                                         <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>ID</th>
@@ -615,6 +624,7 @@ const ManagerDashboard = ({ user, setUser }) => {
                                         <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Description</th>
                                         <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Location</th>
                                         <th style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 'bold' }}>Image</th>
+                                        <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Raised On</th>
                                         <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Deadline</th>
                                         <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Level</th>
                                         <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Severity</th>
@@ -626,22 +636,23 @@ const ManagerDashboard = ({ user, setUser }) => {
                                         <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Turnaround</th>
                                         <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 'bold' }}>Delay</th>
                                     </tr>
+                                    {showColFilters && <ColumnFilterRow columns={ageingFilterColumns} rows={filteredAgeing} filters={ageingColFilters} onChange={setAgeingColFilters} />}
                                 </thead>
                                 <tbody>
                                     {loading ? (
-                                        <tr><td colSpan="17" className="text-center p-4 text-muted">Loading team ageing report...</td></tr>
-                                    ) : filteredAgeing.length === 0 ? (
-                                        <tr><td colSpan="17" className="text-center p-4 text-muted">No tickets found for your reporting team members.</td></tr>
+                                        <tr><td colSpan="18" className="text-center p-4 text-muted">Loading team ageing report...</td></tr>
+                                    ) : columnFilteredAgeing.length === 0 ? (
+                                        <tr><td colSpan="18" className="text-center p-4 text-muted">No tickets found for your reporting team members.</td></tr>
                                     ) : (
-                                        filteredAgeing.map((a, index) => {
-                                            const isGrouped = index > 0 && a.ticket_id === filteredAgeing[index - 1].ticket_id;
+                                        columnFilteredAgeing.map((a, index) => {
+                                            const isGrouped = index > 0 && a.ticket_id === columnFilteredAgeing[index - 1].ticket_id;
                                             let rowSpan = 1;
                                             let anySLA = a.SLA_Breach;
                                             if (!isGrouped) {
-                                                for (let i = index + 1; i < filteredAgeing.length; i++) {
-                                                    if (filteredAgeing[i].ticket_id === a.ticket_id) {
+                                                for (let i = index + 1; i < columnFilteredAgeing.length; i++) {
+                                                    if (columnFilteredAgeing[i].ticket_id === a.ticket_id) {
                                                         rowSpan++;
-                                                        if (filteredAgeing[i].SLA_Breach === true || String(filteredAgeing[i].SLA_Breach).toLowerCase() === 'true') {
+                                                        if (columnFilteredAgeing[i].SLA_Breach === true || String(columnFilteredAgeing[i].SLA_Breach).toLowerCase() === 'true') {
                                                             anySLA = true;
                                                         }
                                                     }
@@ -672,6 +683,7 @@ const ManagerDashboard = ({ user, setUser }) => {
                                                     <td style={{ padding: '12px 8px', textAlign: 'center' }}>
                                                         <AttachmentBadge attachment={a.attachment} />
                                                     </td>
+                                                    <td style={{ padding: '12px 8px', whiteSpace: 'nowrap' }} title={a.timestamp || ''}>{a.timestamp ? String(a.timestamp).split(' ')[0] : '-'}</td>
                                                     <td style={{ padding: '12px 8px' }}>{a.deadline ? String(a.deadline).split(' ')[0] : '-'}</td>
                                                     <td style={{ padding: '12px 8px' }}><span style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>{a.escalation_level || 'L1'}</span></td>
                                                     <td style={{ padding: '12px 8px' }}>{a.severity || '-'}</td>
