@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { parseDateString } from './dateUtils';
 
 // Column-wise filters for report tables; rendered by components/ColumnFilters.jsx.
-// A column is { key, type: 'text' | 'select' | 'daterange' | 'none', getValue: row => value }.
+// A column is { key, type: 'text' | 'select' | 'multiselect' | 'daterange' | 'none', getValue: row => value }.
 // 'text' matches anywhere in the displayed value; 'select' matches one exact value picked from the data;
+// 'multiselect' matches any of several picked values (filter is an array);
 // 'daterange' keeps rows whose date falls within { from, to } (inclusive, either end optional).
 
 const normalize = (val) => String(val ?? '').trim().toLowerCase();
@@ -18,6 +19,7 @@ const toDayKey = (val) => {
 const isFilterActive = (column, filter) => {
     if (column.type === 'none') return false;
     if (column.type === 'daterange') return Boolean(filter?.from || filter?.to);
+    if (column.type === 'multiselect') return Array.isArray(filter) && filter.length > 0;
     return String(filter ?? '').trim() !== '';
 };
 
@@ -32,6 +34,7 @@ export const applyColumnFilters = (rows, columns, filters) => {
             return (!filter.from || day >= filter.from) && (!filter.to || day <= filter.to);
         }
         const val = normalize(c.getValue(row));
+        if (c.type === 'multiselect') return filter.some(f => normalize(f) === val);
         const q = normalize(filter);
         return c.type === 'select' ? val === q : val.includes(q);
     }));
@@ -59,17 +62,17 @@ const formatDays = (hours) => (hours ? `${(hours / 24).toFixed(1)}d` : '-');
 // Columns of the ageing report table (Admin, Super Admin, Manager, Viewer), in display order.
 export const getAgeingFilterColumns = ({ formatPerson, getDelayDays }) => [
     { key: 'ticket_id', type: 'text', getValue: a => `#${a.ticket_id ?? ''}` },
-    { key: 'dept_assigned', type: 'select', getValue: a => a.dept_assigned || '-' },
-    { key: 'issue_category', type: 'select', getValue: a => a.issue_category || '-' },
-    { key: 'activity_category', type: 'select', getValue: a => a.activity_category || '-' },
+    { key: 'dept_assigned', type: 'multiselect', getValue: a => a.dept_assigned || '-' },
+    { key: 'issue_category', type: 'multiselect', getValue: a => a.issue_category || '-' },
+    { key: 'activity_category', type: 'multiselect', getValue: a => a.activity_category || '-' },
     { key: 'description', type: 'text', getValue: a => a.description || '-' },
-    { key: 'location', type: 'select', getValue: a => a.location || '-' },
+    { key: 'location', type: 'multiselect', getValue: a => a.location || '-' },
     { key: 'attachment', type: 'none', getValue: () => '' },
     { key: 'timestamp', type: 'daterange', getValue: a => a.timestamp },
     { key: 'deadline', type: 'daterange', getValue: a => a.deadline },
     { key: 'escalation_level', type: 'select', getValue: a => a.escalation_level || 'L1' },
-    { key: 'severity', type: 'select', getValue: a => a.severity || '-' },
-    { key: 'status', type: 'select', getValue: a => a.status || '-' },
+    { key: 'severity', type: 'multiselect', getValue: a => a.severity || '-' },
+    { key: 'status', type: 'multiselect', getValue: a => a.status || '-' },
     { key: 'assigned_by', type: 'select', getValue: a => formatPerson(a.assigned_by) || '-' },
     { key: 'assigned_to', type: 'select', getValue: a => formatPerson(a.assigned_to) || '-' },
     { key: 'ticket_age_hours', type: 'text', getValue: a => formatDays(a.ticket_age_hours) },
@@ -82,12 +85,12 @@ export const getAgeingFilterColumns = ({ formatPerson, getDelayDays }) => [
 export const getTicketFilterColumns = ({ formatPerson }) => [
     { key: 'ticket_id', type: 'text', getValue: t => `#${t.ticket_id ?? ''}` },
     { key: 'attachment', type: 'none', getValue: () => '' },
-    { key: 'dept_assigned', type: 'select', getValue: t => t.dept_assigned || '-' },
-    { key: 'issue_category', type: 'select', getValue: t => t.issue_category || '-' },
-    { key: 'activity_category', type: 'select', getValue: t => t.activity_category || '-' },
+    { key: 'dept_assigned', type: 'multiselect', getValue: t => t.dept_assigned || '-' },
+    { key: 'issue_category', type: 'multiselect', getValue: t => t.issue_category || '-' },
+    { key: 'activity_category', type: 'multiselect', getValue: t => t.activity_category || '-' },
     { key: 'description', type: 'text', getValue: t => t.description || '-' },
-    { key: 'location', type: 'select', getValue: t => t.location || '-' },
+    { key: 'location', type: 'multiselect', getValue: t => t.location || '-' },
     { key: 'assigned_to', type: 'select', getValue: t => formatPerson(t.assigned_to) || '-' },
-    { key: 'severity', type: 'select', getValue: t => t.severity || '-' },
-    { key: 'status', type: 'select', getValue: t => t.status || '-' }
+    { key: 'severity', type: 'multiselect', getValue: t => t.severity || '-' },
+    { key: 'status', type: 'multiselect', getValue: t => t.status || '-' }
 ];
